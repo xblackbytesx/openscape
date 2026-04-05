@@ -1,0 +1,36 @@
+# Binaries
+tmp/
+/openscape
+
+# Air
+build-errors.log
+
+# Generated templ files
+*_templ.go
+
+# Dependencies
+vendor/
+
+# Downloaded frontend vendor assets (fetched at Docker build time)
+web/static/vendor/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Go
+go.sum
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (dev)
+data/

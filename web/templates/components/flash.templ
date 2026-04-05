@@ -1,0 +1,14 @@
+package components
+
+templ Flash(errorMsg string, successMsg string) {
+	if errorMsg != "" {
+		<div class="flash flash--error" role="alert">
+			{ errorMsg }
+		</div>
+	}
+	if successMsg != "" {
+		<div class="flash flash--success" role="alert">
+			{ successMsg }
+		</div>
+	}
+}

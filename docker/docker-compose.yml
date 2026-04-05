@@ -1,0 +1,73 @@
+name: openscape
+
+networks:
+  proxy:
+    name: proxy
+    external: true
+  internal:
+    internal: true
+
+volumes:
+  openscape-database:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DOCKER_ROOT}/openscape/database
+  openscape-uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DOCKER_ROOT}/openscape/uploads
+
+services:
+  openscape-db:
+    image: postgres:17-alpine
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    labels:
+      - "traefik.enable=false"
+    environment:
+      POSTGRES_USER: openscape
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: openscape
+    volumes:
+      - openscape-database:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openscape"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  openscape-app:
+    container_name: openscape-app
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+      - proxy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://openscape:${DB_PASSWORD}@openscape-db:5432/openscape?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET}
+      PORT: "8080"
+      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+      UPLOADS_PATH: /app/data/uploads
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - openscape-uploads:/app/data/uploads
+    depends_on:
+      openscape-db:
+        condition: service_healthy
+    restart: unless-stopped

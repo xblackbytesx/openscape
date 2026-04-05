@@ -1,0 +1,25 @@
+package pages
+
+import (
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/layouts"
+)
+
+templ GalleryUnlock(gallery *domain.Gallery, csrfToken string, errMsg string) {
+	@layouts.Auth("Password Required") {
+		if errMsg != "" {
+			<div class="flash flash--error">{ errMsg }</div>
+		}
+		<p class="auth-card__subtitle">
+			This gallery is password-protected. Enter the password to view <strong>{ gallery.Title }</strong>.
+		</p>
+		<form method="POST" action={ templ.SafeURL("/g/" + gallery.Slug + "/unlock") } class="form">
+			<input type="hidden" name="_csrf" value={ csrfToken }/>
+			<div class="form-group">
+				<label class="form-label" for="password">Password</label>
+				<input class="form-input" type="password" id="password" name="password" required autofocus/>
+			</div>
+			<button type="submit" class="btn btn--primary btn--full">View Gallery</button>
+		</form>
+	}
+}

@@ -1,0 +1,80 @@
+package components
+
+import "github.com/openscape/openscape/internal/domain"
+
+templ PSVViewer(photo *domain.Photo) {
+	<div
+		id="psv-container"
+		class="psv-container"
+		data-src={ photo.OriginalURL() }
+	></div>
+	<script type="module">
+		// Import map in gallery layout resolves these to /static/vendor/psv/*.esm.js
+		import { Viewer } from '@photo-sphere-viewer/core';
+		import { AutorotatePlugin } from '@photo-sphere-viewer/autorotate-plugin';
+		import { CompassPlugin } from '@photo-sphere-viewer/compass-plugin';
+
+		const container = document.getElementById('psv-container');
+		new Viewer({
+			container: container,
+			panorama: container.dataset.src,
+			defaultZoomLvl: 50,
+			navbar: ['autorotate', 'zoom', 'fullscreen'],
+			plugins: [
+				[AutorotatePlugin, {
+					autostartDelay: 2500,
+					autostartOnIdle: true,
+					idleDelay: 3000,
+					autorotatePitch: '0deg',
+					autorotateSpeed: '0.5rpm',
+				}],
+				CompassPlugin,
+			],
+		});
+	</script>
+}
+
+templ FlatPhotoViewer(photo *domain.Photo) {
+	<div class="flat-viewer" id="flat-viewer">
+		<img
+			src={ photo.OriginalURL() }
+			alt={ photo.DisplayTitle() }
+			class="flat-viewer__img"
+		/>
+		<button
+			class="flat-viewer__fullscreen"
+			id="flat-fullscreen-btn"
+			aria-label="Toggle fullscreen"
+			title="Fullscreen"
+		>
+			<svg id="icon-expand" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+				<path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+			</svg>
+			<svg id="icon-compress" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:none">
+				<path d="M5 1v4H1M9 5V1h4M9 13v-4h4M1 9h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+			</svg>
+		</button>
+		<script>
+			(function() {
+				var viewer = document.getElementById('flat-viewer');
+				var btn    = document.getElementById('flat-fullscreen-btn');
+				var expand   = document.getElementById('icon-expand');
+				var compress = document.getElementById('icon-compress');
+
+				btn.addEventListener('click', function() {
+					if (!document.fullscreenElement) {
+						viewer.requestFullscreen && viewer.requestFullscreen();
+					} else {
+						document.exitFullscreen && document.exitFullscreen();
+					}
+				});
+
+				document.addEventListener('fullscreenchange', function() {
+					var fs = !!document.fullscreenElement;
+					expand.style.display   = fs ? 'none'  : '';
+					compress.style.display = fs ? ''      : 'none';
+				});
+			})();
+		</script>
+	</div>
+}

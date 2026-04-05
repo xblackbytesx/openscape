@@ -1,0 +1,49 @@
+name: openscape-dev
+
+services:
+  openscape-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - "8080:8080"
+    env_file:
+      - path: ../.env.dev
+        required: false
+    environment:
+      DATABASE_URL: postgres://openscape:openscape@openscape-db:5432/openscape?sslmode=disable
+      SESSION_SECRET: dev-session-secret-32-chars-min!!
+      PORT: "8080"
+      SECURE_COOKIES: "false"
+      ALLOW_REGISTRATION: "true"
+      MAX_UPLOAD_MB: "100"
+      UPLOADS_PATH: /app/data/uploads
+    volumes:
+      - ..:/app
+      # Anonymous volume keeps vendor assets baked into the image alive
+      # even when the host bind-mount shadows /app/web/static/vendor
+      - /app/web/static/vendor
+      - openscape_uploads_dev:/app/data/uploads
+    depends_on:
+      openscape-db:
+        condition: service_healthy
+
+  openscape-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: openscape
+      POSTGRES_PASSWORD: openscape
+      POSTGRES_DB: openscape
+    ports:
+      - "5432:5432"
+    volumes:
+      - openscape_pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openscape"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  openscape_pgdata_dev:
+  openscape_uploads_dev:

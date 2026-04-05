@@ -1,0 +1,54 @@
+package pages
+
+import (
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/layouts"
+)
+
+templ AdminGalleryNew(user *domain.User, csrfToken string, errMsg string) {
+	@layouts.Base("New Gallery", csrfToken, user) {
+		<div class="page-header">
+			<h1 class="page-title">New Gallery</h1>
+			<a href="/admin" class="btn btn--ghost">Cancel</a>
+		</div>
+		if errMsg != "" {
+			<div class="flash flash--error">{ errMsg }</div>
+		}
+		<div class="form-card">
+			<form method="POST" action="/admin/galleries" class="form">
+				<input type="hidden" name="_csrf" value={ csrfToken }/>
+				<div class="form-group">
+					<label class="form-label" for="title">Title <span class="form-required">*</span></label>
+					<input class="form-input" type="text" id="title" name="title" required placeholder="My 360° Adventure"/>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="description">Description</label>
+					<textarea class="form-input form-textarea" id="description" name="description" placeholder="Describe your gallery..."></textarea>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="visibility">Visibility <span class="form-required">*</span></label>
+					<select class="form-input form-select" id="visibility" name="visibility" onchange="togglePasswordField(this.value)">
+						<option value="private">Private — only you and invited members</option>
+						<option value="public">Public — visible to everyone</option>
+						<option value="unlisted">Unlisted — anyone with the link</option>
+						<option value="unlisted_protected">Password-protected — unlisted + password</option>
+					</select>
+				</div>
+				<div class="form-group" id="password-field" style="display:none">
+					<label class="form-label" for="password">Gallery Password</label>
+					<input class="form-input" type="password" id="password" name="password" placeholder="Set a password for this gallery"/>
+				</div>
+				<div class="form-actions">
+					<button type="submit" class="btn btn--primary">Create Gallery</button>
+					<a href="/admin" class="btn btn--ghost">Cancel</a>
+				</div>
+			</form>
+		</div>
+		<script>
+			function togglePasswordField(val) {
+				document.getElementById('password-field').style.display =
+					val === 'unlisted_protected' ? '' : 'none';
+			}
+		</script>
+	}
+}

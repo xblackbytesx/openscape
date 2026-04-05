@@ -1,0 +1,41 @@
+package layouts
+
+import "github.com/openscape/openscape/internal/domain"
+
+templ Base(title string, csrfToken string, user *domain.User) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } — OpenScape</title>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<script src="/static/vendor/htmx.min.js" defer></script>
+		</head>
+		<body class="app-body">
+			<nav class="topnav">
+				<a href="/" class="topnav__logo">OpenScape</a>
+				<div class="topnav__links">
+					<a href="/admin" class="topnav__link">My Galleries</a>
+					if user != nil && user.IsAdmin {
+						<a href="/admin/users" class="topnav__link">Users</a>
+					}
+				</div>
+				<div class="topnav__user">
+					if user != nil {
+						<span class="topnav__username">{ user.Username }</span>
+						<form method="POST" action="/logout" style="display:inline">
+							<input type="hidden" name="_csrf" value={ csrfToken }/>
+							<button type="submit" class="btn btn--ghost btn--sm">Logout</button>
+						</form>
+					} else {
+						<a href="/login" class="btn btn--ghost btn--sm">Login</a>
+					}
+				</div>
+			</nav>
+			<main class="app-main">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

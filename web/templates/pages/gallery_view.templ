@@ -1,0 +1,28 @@
+package pages
+
+import (
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/components"
+	"github.com/openscape/openscape/web/templates/layouts"
+)
+
+templ GalleryView(gallery *domain.Gallery, photos []*domain.Photo, csrfToken string, canEdit bool, user *domain.User) {
+	@layouts.GalleryLayout(gallery.Title, csrfToken, gallery, user, canEdit) {
+		if canEdit {
+			<div class="gallery-upload-section">
+				@components.UploadZone(gallery, csrfToken)
+			</div>
+		}
+		@components.PhotoGrid(photos, gallery.Slug, canEdit, csrfToken)
+		if canEdit && len(photos) > 1 {
+			<div
+				id="sortable-meta"
+				data-gallery-id={ gallery.ID.String() }
+				data-csrf={ csrfToken }
+				style="display:none"
+			></div>
+			<script src="/static/vendor/sortable.min.js"></script>
+			<script src="/static/js/app.js" defer></script>
+		}
+	}
+}

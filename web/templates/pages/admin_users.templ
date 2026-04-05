@@ -1,0 +1,94 @@
+package pages
+
+import (
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/layouts"
+)
+
+templ AdminUsers(currentUser *domain.User, users []*domain.User, csrfToken string, errMsg string) {
+	@layouts.Base("Users", csrfToken, currentUser) {
+		<div class="page-header">
+			<h1 class="page-title">Users</h1>
+		</div>
+		if errMsg != "" {
+			<div class="flash flash--error">{ errMsg }</div>
+		}
+		<div class="manage-layout">
+			<section class="manage-section">
+				<h2 class="manage-section__title">Create User</h2>
+				<div class="form-card">
+					<form method="POST" action="/admin/users" class="form">
+						<input type="hidden" name="_csrf" value={ csrfToken }/>
+						<div class="form-row">
+							<div class="form-group form-group--grow">
+								<label class="form-label" for="username">Username</label>
+								<input class="form-input" type="text" id="username" name="username" required/>
+							</div>
+							<div class="form-group form-group--grow">
+								<label class="form-label" for="email">Email</label>
+								<input class="form-input" type="email" id="email" name="email" required/>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-group form-group--grow">
+								<label class="form-label" for="password">Password</label>
+								<input class="form-input" type="password" id="password" name="password" required minlength="8"/>
+							</div>
+							<div class="form-group form-group--check">
+								<label class="form-label form-label--check">
+									<input type="checkbox" name="is_admin" value="true"/>
+									Admin
+								</label>
+							</div>
+						</div>
+						<div class="form-actions">
+							<button type="submit" class="btn btn--primary">Create User</button>
+						</div>
+					</form>
+				</div>
+			</section>
+			<section class="manage-section">
+				<h2 class="manage-section__title">All Users</h2>
+				<table class="members-table">
+					<thead>
+						<tr>
+							<th>Username</th>
+							<th>Email</th>
+							<th>Role</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, u := range users {
+							<tr id={ "user-" + u.ID.String() }>
+								<td>{ u.Username }</td>
+								<td>{ u.Email }</td>
+								<td>
+									if u.IsAdmin {
+										<span class="badge badge--admin">Admin</span>
+									} else {
+										<span class="badge badge--viewer">User</span>
+									}
+								</td>
+								<td>
+									if u.ID != currentUser.ID {
+										<button
+											class="btn btn--danger btn--sm"
+											hx-delete={ "/admin/users/" + u.ID.String() }
+											hx-target="closest tr"
+											hx-swap="outerHTML swap:0.3s"
+											hx-confirm={ "Delete user " + u.Username + "?" }
+											hx-headers={ `{"X-CSRF-Token": "` + csrfToken + `"}` }
+										>Delete</button>
+									} else {
+										<span class="text-muted">You</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</section>
+		</div>
+	}
+}

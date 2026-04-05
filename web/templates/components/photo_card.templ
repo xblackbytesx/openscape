@@ -1,0 +1,64 @@
+package components
+
+import "github.com/openscape/openscape/internal/domain"
+
+templ PhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken string) {
+	<article class="photo-card" data-id={ p.ID.String() }>
+		<a href={ templ.SafeURL("/g/" + gallerySlug + "/photo/" + p.ID.String()) } class="photo-card__link">
+			if p.Is360 {
+				<div class="photo-card__thumb photo-card__thumb--panoramic" style={ "background-image:url(" + p.ThumbURL() + ")" }>
+					<span class="photo-card__badge">360°</span>
+					<div class="photo-card__overlay">
+						if p.Title != "" {
+							<p class="photo-card__title">{ p.Title }</p>
+						}
+					</div>
+				</div>
+			} else {
+				<div class="photo-card__thumb">
+					<img
+						src={ p.ThumbURL() }
+						alt={ p.DisplayTitle() }
+						class="photo-card__img"
+						loading="lazy"
+					/>
+					<div class="photo-card__overlay">
+						if p.Title != "" {
+							<p class="photo-card__title">{ p.Title }</p>
+						}
+					</div>
+				</div>
+			}
+		</a>
+		if canEdit {
+			<div class="photo-card__actions">
+				<button
+					class="btn-icon btn-icon--danger"
+					hx-delete={ "/admin/galleries/" + p.GalleryID.String() + "/photos/" + p.ID.String() }
+					hx-confirm="Delete this photo permanently?"
+					hx-target="closest .photo-card"
+					hx-swap="outerHTML swap:0.3s"
+					hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+					title="Delete photo"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="3 6 5 6 21 6"/>
+						<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+						<path d="M10 11v6M14 11v6"/>
+					</svg>
+				</button>
+				<button
+					class="btn-icon"
+					hx-post={ "/admin/galleries/" + p.GalleryID.String() + "/cover/" + p.ID.String() }
+					hx-swap="none"
+					hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+					title="Set as cover"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+					</svg>
+				</button>
+			</div>
+		}
+	</article>
+}

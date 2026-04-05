@@ -1,0 +1,31 @@
+FROM golang:1.25-alpine
+
+RUN apk add --no-cache git curl nodejs npm
+
+WORKDIR /app
+
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.1001
+RUN go install github.com/air-verse/air@v1.61.5
+
+# Install front-end deps and copy assets into the image.
+# The docker-compose anonymous volume for web/static/vendor keeps these files
+# alive even when the host bind-mount shadows /app.
+COPY web/package.json /tmp/web/
+RUN npm install --prefix /tmp/web && \
+    mkdir -p web/static/vendor/psv && \
+    cp /tmp/web/node_modules/htmx.org/dist/htmx.min.js              web/static/vendor/htmx.min.js && \
+    cp /tmp/web/node_modules/sortablejs/Sortable.min.js              web/static/vendor/sortable.min.js && \
+    cp /tmp/web/node_modules/three/build/three.module.min.js         web/static/vendor/psv/three.module.js && \
+    cp /tmp/web/node_modules/@photo-sphere-viewer/core/index.module.js \
+                                                                      web/static/vendor/psv/core.esm.js && \
+    cp /tmp/web/node_modules/@photo-sphere-viewer/autorotate-plugin/index.module.js \
+                                                                      web/static/vendor/psv/autorotate.esm.js && \
+    cp /tmp/web/node_modules/@photo-sphere-viewer/compass-plugin/index.module.js \
+                                                                      web/static/vendor/psv/compass.esm.js && \
+    CSS=$(find /tmp/web/node_modules/@photo-sphere-viewer/core -maxdepth 3 -name "*.css" | head -1) && \
+    cp "$CSS" web/static/vendor/psv/photo-sphere-viewer.css && \
+    rm -rf /tmp/web
+
+EXPOSE 8080
+
+CMD ["air", "-c", "docker/.air.toml"]

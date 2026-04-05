@@ -1,0 +1,13 @@
+{
+  "name": "openscape-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@photo-sphere-viewer/autorotate-plugin": "^5.0.0",
+    "@photo-sphere-viewer/compass-plugin": "^5.0.0",
+    "@photo-sphere-viewer/core": "^5.0.0",
+    "htmx.org": "^2.0.4",
+    "sortablejs": "^1.15.6",
+    "three": "0.170.0"
+  }
+}

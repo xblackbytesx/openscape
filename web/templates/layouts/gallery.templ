@@ -1,0 +1,77 @@
+package layouts
+
+import "github.com/openscape/openscape/internal/domain"
+
+templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, user *domain.User, canEdit bool) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } — OpenScape</title>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<link rel="stylesheet" href="/static/vendor/psv/photo-sphere-viewer.css"/>
+			<script src="/static/vendor/htmx.min.js" defer></script>
+			<!-- Import map for PSV ESM modules — must precede any <script type="module"> -->
+			<script type="importmap">
+				{
+					"imports": {
+						"three": "/static/vendor/psv/three.module.js",
+						"@photo-sphere-viewer/core": "/static/vendor/psv/core.esm.js",
+						"@photo-sphere-viewer/autorotate-plugin": "/static/vendor/psv/autorotate.esm.js",
+						"@photo-sphere-viewer/compass-plugin": "/static/vendor/psv/compass.esm.js"
+					}
+				}
+			</script>
+		</head>
+		<body class="gallery-body">
+			<header class="gallery-topbar">
+				<a href="/" class="gallery-topbar__logo">OpenScape</a>
+				<span class="gallery-topbar__title">{ gallery.Title }</span>
+				<div class="gallery-topbar__actions">
+					if canEdit {
+						<a href={ templ.SafeURL("/admin/galleries/" + gallery.ID.String()) } class="btn btn--ghost btn--sm">Manage</a>
+					}
+					if user != nil {
+						<a href="/admin" class="btn btn--ghost btn--sm">Dashboard</a>
+					} else {
+						<a href="/login" class="btn btn--ghost btn--sm">Login</a>
+					}
+				</div>
+			</header>
+			<main class="gallery-content">
+				{ children... }
+			</main>
+			if canEdit {
+				<div class="gallery-fab-area">
+					<label for="fab-upload-input" class="gallery-fab" title="Upload photos">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+							<polyline points="17 8 12 3 7 8"/>
+							<line x1="12" y1="3" x2="12" y2="15"/>
+						</svg>
+					</label>
+					<form
+						id="fab-upload-form"
+						hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
+						hx-encoding="multipart/form-data"
+						hx-swap="none"
+						hx-on::after-request="if(event.detail.successful) window.location.reload()"
+						style="display:none"
+					>
+						<input type="hidden" name="_csrf" value={ csrfToken }/>
+						<input
+							id="fab-upload-input"
+							type="file"
+							name="photos"
+							multiple
+							accept="image/*,.heic,.heif"
+							style="display:none"
+							onchange="document.getElementById('fab-upload-form').dispatchEvent(new Event('submit', {bubbles:true}))"
+						/>
+					</form>
+				</div>
+			}
+		</body>
+	</html>
+}

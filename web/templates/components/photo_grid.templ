@@ -1,0 +1,32 @@
+package components
+
+import "github.com/openscape/openscape/internal/domain"
+
+templ PhotoGrid(photos []*domain.Photo, gallerySlug string, canEdit bool, csrfToken string) {
+	if len(photos) == 0 {
+		<div class="empty-state">
+			<div class="empty-state__icon">
+				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+					<circle cx="8.5" cy="8.5" r="1.5"/>
+					<polyline points="21 15 16 10 5 21"/>
+				</svg>
+			</div>
+			<p class="empty-state__text">No photos yet.</p>
+			if canEdit {
+				<p class="empty-state__hint">Upload your first photo using the button above.</p>
+			}
+		</div>
+	} else {
+		<div
+			class="photo-grid"
+			if canEdit {
+				id="sortable-grid"
+			}
+		>
+			for _, p := range photos {
+				@PhotoCard(p, gallerySlug, canEdit, csrfToken)
+			}
+		</div>
+	}
+}

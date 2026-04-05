@@ -1,0 +1,2 @@
+ALTER TABLE galleries DROP CONSTRAINT IF EXISTS fk_cover_photo;
+DROP TABLE IF EXISTS photos;

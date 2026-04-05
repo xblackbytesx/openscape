@@ -1,0 +1,32 @@
+package pages
+
+import "github.com/openscape/openscape/web/templates/layouts"
+
+templ Setup(csrfToken string, errMsg string) {
+	@layouts.Auth("First-time Setup") {
+		if errMsg != "" {
+			<div class="flash flash--error">{ errMsg }</div>
+		}
+		<p class="auth-card__subtitle">Create your admin account to get started.</p>
+		<form method="POST" action="/setup" class="form">
+			<input type="hidden" name="_csrf" value={ csrfToken }/>
+			<div class="form-group">
+				<label class="form-label" for="username">Username</label>
+				<input class="form-input" type="text" id="username" name="username" required autocomplete="username"/>
+			</div>
+			<div class="form-group">
+				<label class="form-label" for="email">Email</label>
+				<input class="form-input" type="email" id="email" name="email" required autocomplete="email"/>
+			</div>
+			<div class="form-group">
+				<label class="form-label" for="password">Password</label>
+				<input class="form-input" type="password" id="password" name="password" required minlength="8" autocomplete="new-password"/>
+			</div>
+			<div class="form-group">
+				<label class="form-label" for="confirm_password">Confirm Password</label>
+				<input class="form-input" type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password"/>
+			</div>
+			<button type="submit" class="btn btn--primary btn--full">Create Admin Account</button>
+		</form>
+	}
+}

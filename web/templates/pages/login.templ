@@ -1,0 +1,23 @@
+package pages
+
+import "github.com/openscape/openscape/web/templates/layouts"
+
+templ Login(csrfToken string, errMsg string) {
+	@layouts.Auth("Sign In") {
+		if errMsg != "" {
+			<div class="flash flash--error">{ errMsg }</div>
+		}
+		<form method="POST" action="/login" class="form">
+			<input type="hidden" name="_csrf" value={ csrfToken }/>
+			<div class="form-group">
+				<label class="form-label" for="email">Email</label>
+				<input class="form-input" type="email" id="email" name="email" required autocomplete="email"/>
+			</div>
+			<div class="form-group">
+				<label class="form-label" for="password">Password</label>
+				<input class="form-input" type="password" id="password" name="password" required autocomplete="current-password"/>
+			</div>
+			<button type="submit" class="btn btn--primary btn--full">Sign In</button>
+		</form>
+	}
+}

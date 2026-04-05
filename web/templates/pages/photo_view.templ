@@ -1,0 +1,124 @@
+package pages
+
+import (
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/components"
+	"github.com/openscape/openscape/web/templates/layouts"
+)
+
+templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, csrfToken string, canEdit bool, user *domain.User) {
+	@layouts.GalleryLayout(photo.DisplayTitle(), csrfToken, gallery, user, canEdit) {
+		if photo.Is360 {
+			<!-- Immersive 360 layout: viewer fills viewport, info overlaid -->
+			<div class="photo-view photo-view--360">
+				<div class="photo-view__viewer">
+					@components.PSVViewer(photo)
+				</div>
+				<div class="photo-view__overlay">
+					<div class="photo-view__meta">
+						<a href={ templ.SafeURL("/g/" + gallery.Slug) } class="link link--back">← Back to { gallery.Title }</a>
+						<span class="badge badge--360">360°</span>
+					</div>
+					if photo.Title != "" {
+						<p class="photo-view__overlay-title">{ photo.Title }</p>
+					}
+					if photo.Description != "" {
+						<p class="photo-view__overlay-desc">{ photo.Description }</p>
+					}
+				</div>
+				if canEdit {
+					<details class="photo-view__edit-overlay">
+						<summary class="photo-view__edit-toggle">Edit</summary>
+						<div class="photo-view__edit-panel">
+							<form
+								hx-put={ "/admin/galleries/" + gallery.ID.String() + "/photos/" + photo.ID.String() }
+								hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+								hx-swap="none"
+								class="form"
+							>
+								<input type="hidden" name="_csrf" value={ csrfToken }/>
+								<div class="form-group">
+									<label class="form-label" for="photo-title">Title</label>
+									<input class="form-input" type="text" id="photo-title" name="title" value={ photo.Title }/>
+								</div>
+								<div class="form-group">
+									<label class="form-label" for="photo-desc">Description</label>
+									<textarea class="form-input form-textarea" id="photo-desc" name="description">{ photo.Description }</textarea>
+								</div>
+								<div class="form-actions">
+									<button type="submit" class="btn btn--primary btn--sm">Save</button>
+									<button
+										type="button"
+										class="btn btn--danger btn--sm"
+										data-gallery-slug={ gallery.Slug }
+										hx-delete={ "/admin/galleries/" + gallery.ID.String() + "/photos/" + photo.ID.String() }
+										hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+										hx-confirm="Delete this photo permanently?"
+										hx-on::after-request="if(event.detail.successful) window.location.href='/g/'+this.dataset.gallerySlug"
+									>Delete</button>
+								</div>
+							</form>
+						</div>
+					</details>
+				}
+			</div>
+		} else {
+			<!-- Standard flat photo layout: viewer + info below -->
+			<div class="photo-view">
+				<div class="photo-view__viewer">
+					@components.FlatPhotoViewer(photo)
+				</div>
+				<div class="photo-view__info">
+					<div class="photo-view__meta">
+						<a href={ templ.SafeURL("/g/" + gallery.Slug) } class="link link--back">
+							← Back to { gallery.Title }
+						</a>
+					</div>
+					if photo.Title != "" || photo.Description != "" {
+						<div class="photo-view__details">
+							if photo.Title != "" {
+								<h1 class="photo-view__title">{ photo.Title }</h1>
+							}
+							if photo.Description != "" {
+								<p class="photo-view__desc">{ photo.Description }</p>
+							}
+						</div>
+					}
+					if canEdit {
+						<details class="photo-view__edit">
+							<summary class="photo-view__edit-toggle">Edit photo details</summary>
+							<form
+								hx-put={ "/admin/galleries/" + gallery.ID.String() + "/photos/" + photo.ID.String() }
+								hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+								hx-swap="none"
+								class="form"
+							>
+								<input type="hidden" name="_csrf" value={ csrfToken }/>
+								<div class="form-group">
+									<label class="form-label" for="photo-title">Title</label>
+									<input class="form-input" type="text" id="photo-title" name="title" value={ photo.Title }/>
+								</div>
+								<div class="form-group">
+									<label class="form-label" for="photo-desc">Description</label>
+									<textarea class="form-input form-textarea" id="photo-desc" name="description">{ photo.Description }</textarea>
+								</div>
+								<div class="form-actions">
+									<button type="submit" class="btn btn--primary">Save</button>
+									<button
+										type="button"
+										class="btn btn--danger"
+										data-gallery-slug={ gallery.Slug }
+										hx-delete={ "/admin/galleries/" + gallery.ID.String() + "/photos/" + photo.ID.String() }
+										hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+										hx-confirm="Delete this photo permanently?"
+										hx-on::after-request="if(event.detail.successful) window.location.href='/g/'+this.dataset.gallerySlug"
+									>Delete Photo</button>
+								</div>
+							</form>
+						</details>
+					}
+				</div>
+			</div>
+		}
+	}
+}

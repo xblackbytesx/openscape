@@ -1,0 +1,51 @@
+package pages
+
+import (
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/components"
+)
+
+templ Home(galleries []*domain.Gallery, csrfToken string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>OpenScape — 360° Photo Gallery</title>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<script src="/static/vendor/htmx.min.js" defer></script>
+		</head>
+		<body class="app-body">
+			<nav class="topnav">
+				<a href="/" class="topnav__logo">OpenScape</a>
+				<div class="topnav__links"></div>
+				<div class="topnav__user">
+					<a href="/login" class="btn btn--ghost btn--sm">Login</a>
+				</div>
+			</nav>
+			<main class="app-main">
+				<div class="page-header">
+					<h1 class="page-title">Public Galleries</h1>
+				</div>
+				if len(galleries) == 0 {
+					<div class="empty-state">
+						<div class="empty-state__icon">
+							<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+								<rect x="3" y="3" width="18" height="18" rx="2"/>
+								<circle cx="8.5" cy="8.5" r="1.5"/>
+								<polyline points="21 15 16 10 5 21"/>
+							</svg>
+						</div>
+						<p class="empty-state__text">No public galleries yet.</p>
+					</div>
+				} else {
+					<div class="galleries-grid">
+						for _, g := range galleries {
+							@components.GalleryCard(g, false, csrfToken)
+						}
+					</div>
+				}
+			</main>
+		</body>
+	</html>
+}

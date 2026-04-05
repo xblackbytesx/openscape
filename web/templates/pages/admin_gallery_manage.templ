@@ -1,0 +1,186 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/web/templates/components"
+	"github.com/openscape/openscape/web/templates/layouts"
+)
+
+templ AdminGalleryManage(user *domain.User, gallery *domain.Gallery, photos []*domain.Photo, members []*domain.GalleryMember, csrfToken string, errMsg string) {
+	@layouts.Base(gallery.Title, csrfToken, user) {
+		<div class="page-header">
+			<div class="page-header__left">
+				<a href="/admin" class="link link--back">← My Galleries</a>
+				<h1 class="page-title">{ gallery.Title }</h1>
+			</div>
+			<div class="page-header__actions">
+				<a href={ templ.SafeURL("/g/" + gallery.Slug) } class="btn btn--ghost" target="_blank">View Gallery ↗</a>
+			</div>
+		</div>
+		if errMsg != "" {
+			<div class="flash flash--error">{ errMsg }</div>
+		}
+		<div class="manage-layout">
+			<!-- Settings section -->
+			<section class="manage-section">
+				<h2 class="manage-section__title">Gallery Settings</h2>
+				<div class="form-card">
+					<form
+						hx-put={ "/admin/galleries/" + gallery.ID.String() }
+						hx-swap="none"
+						hx-on::after-request="if(event.detail.successful) window.location.reload()"
+						class="form"
+					>
+						<input type="hidden" name="_csrf" value={ csrfToken }/>
+						<div class="form-row">
+							<div class="form-group form-group--grow">
+								<label class="form-label" for="title">Title</label>
+								<input class="form-input" type="text" id="title" name="title" value={ gallery.Title } required/>
+							</div>
+							<div class="form-group">
+								<label class="form-label" for="slug">Slug (URL path)</label>
+								<input class="form-input" type="text" id="slug" name="slug" value={ gallery.Slug } required pattern="[a-z0-9-]+"/>
+							</div>
+						</div>
+						<div class="form-group">
+							<label class="form-label" for="description">Description</label>
+							<textarea class="form-input form-textarea" id="description" name="description">{ gallery.Description }</textarea>
+						</div>
+						<div class="form-group">
+							<label class="form-label" for="visibility">Visibility</label>
+							<select class="form-input form-select" id="visibility" name="visibility" onchange="togglePasswordField(this.value)">
+								<option value="private" selected?={ gallery.Visibility == domain.VisibilityPrivate }>Private</option>
+								<option value="public" selected?={ gallery.Visibility == domain.VisibilityPublic }>Public</option>
+								<option value="unlisted" selected?={ gallery.Visibility == domain.VisibilityUnlisted }>Unlisted</option>
+								<option value="unlisted_protected" selected?={ gallery.Visibility == domain.VisibilityUnlistedProtected }>Password-protected</option>
+							</select>
+						</div>
+						<div class="form-group" id="password-field" style={ passwordFieldStyle(gallery.Visibility) }>
+							<label class="form-label" for="password">
+								if gallery.Visibility == domain.VisibilityUnlistedProtected {
+									New Password (leave blank to keep current)
+								} else {
+									Gallery Password
+								}
+							</label>
+							<input class="form-input" type="password" id="password" name="password"/>
+						</div>
+						<div class="form-group">
+							<label class="form-label">Share URL</label>
+							<div class="share-url">
+								<code class="share-url__code" id="share-url-text"></code>
+								<button type="button" class="btn btn--ghost btn--sm" onclick="copyShareURL()">Copy</button>
+							</div>
+						</div>
+						<div class="form-actions">
+							<button type="submit" class="btn btn--primary">Save Settings</button>
+						</div>
+					</form>
+				</div>
+			</section>
+			<!-- Photos section -->
+			<section class="manage-section">
+				<h2 class="manage-section__title">Photos ({ photoCount(photos) })</h2>
+				@components.UploadZone(gallery, csrfToken)
+				if len(photos) > 0 {
+					<div class="photo-grid" id="sortable-grid">
+						for _, p := range photos {
+							@components.PhotoCard(p, gallery.Slug, true, csrfToken)
+						}
+					</div>
+					if len(photos) > 1 {
+						<div
+							id="sortable-meta"
+							data-gallery-id={ gallery.ID.String() }
+							data-csrf={ csrfToken }
+							style="display:none"
+						></div>
+						<script src="/static/vendor/sortable.min.js"></script>
+						<script src="/static/js/app.js" defer></script>
+					}
+				}
+			</section>
+			<!-- Members section -->
+			<section class="manage-section">
+				<h2 class="manage-section__title">Shared With</h2>
+				<div class="form-card">
+					<form
+						hx-post={ "/admin/galleries/" + gallery.ID.String() + "/members" }
+						hx-swap="none"
+						hx-on::after-request="if(event.detail.successful) window.location.reload()"
+						class="form form--inline"
+					>
+						<input type="hidden" name="_csrf" value={ csrfToken }/>
+						<input class="form-input" type="email" name="email" placeholder="user@example.com" required/>
+						<select class="form-input form-select form-select--sm" name="role">
+							<option value="viewer">Viewer</option>
+							<option value="editor">Editor</option>
+						</select>
+						<button type="submit" class="btn btn--primary">Add</button>
+					</form>
+					if len(members) > 0 {
+						<table class="members-table">
+							<thead>
+								<tr>
+									<th>Username</th>
+									<th>Email</th>
+									<th>Role</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody id="members-list">
+								for _, m := range members {
+									@components.MemberRow(m, gallery.ID.String(), csrfToken)
+								}
+							</tbody>
+						</table>
+					}
+				</div>
+			</section>
+			<!-- Danger zone -->
+			<section class="manage-section manage-section--danger">
+				<h2 class="manage-section__title">Danger Zone</h2>
+				<div class="form-card form-card--danger">
+					<p>Permanently delete this gallery and all its photos.</p>
+					<form
+						hx-delete={ "/admin/galleries/" + gallery.ID.String() }
+						hx-confirm={ "Delete gallery \"" + gallery.Title + "\" and all its photos? This cannot be undone." }
+						hx-on::after-request="if(event.detail.successful) window.location.href='/admin'"
+					>
+						<input type="hidden" name="_csrf" value={ csrfToken }/>
+						<button type="submit" class="btn btn--danger">Delete Gallery</button>
+					</form>
+				</div>
+			</section>
+		</div>
+		<div id="share-meta" data-slug={ gallery.Slug } style="display:none"></div>
+		<script>
+			(function() {
+				const slug = document.getElementById('share-meta').dataset.slug;
+				document.getElementById('share-url-text').textContent = window.location.origin + '/g/' + slug;
+			})();
+
+			function copyShareURL() {
+				const text = document.getElementById('share-url-text').textContent;
+				navigator.clipboard.writeText(text).catch(() => {});
+			}
+
+			function togglePasswordField(val) {
+				document.getElementById('password-field').style.display =
+					val === 'unlisted_protected' ? '' : 'none';
+			}
+		</script>
+	}
+}
+
+func passwordFieldStyle(v domain.GalleryVisibility) string {
+	if v == domain.VisibilityUnlistedProtected {
+		return ""
+	}
+	return "display:none"
+}
+
+func photoCount(photos []*domain.Photo) string {
+	return fmt.Sprintf("%d", len(photos))
+}
