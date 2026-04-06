@@ -92,7 +92,8 @@ func (s *GalleryStore) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]*d
 		            (SELECT p2.thumb_path FROM photos p2
 		             WHERE p2.gallery_id = g.id
 		             ORDER BY p2.sort_order ASC, p2.created_at ASC
-		             LIMIT 1)
+		             LIMIT 1),
+		            ''
 		        ) AS cover_thumb
 		 FROM galleries g
 		 LEFT JOIN photos p ON p.gallery_id = g.id
@@ -118,7 +119,8 @@ func (s *GalleryStore) ListPublic(ctx context.Context) ([]*domain.Gallery, error
 		            (SELECT p2.thumb_path FROM photos p2
 		             WHERE p2.gallery_id = g.id
 		             ORDER BY p2.sort_order ASC, p2.created_at ASC
-		             LIMIT 1)
+		             LIMIT 1),
+		            ''
 		        ) AS cover_thumb
 		 FROM galleries g
 		 LEFT JOIN photos p ON p.gallery_id = g.id
