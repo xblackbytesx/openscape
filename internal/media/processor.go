@@ -34,7 +34,7 @@ func (p *Processor) SaveOriginal(galleryID, photoID uuid.UUID, data []byte, ext 
 	}
 	filename := photoID.String() + ext
 	fullPath := filepath.Join(dir, filename)
-	if err := os.WriteFile(fullPath, data, 0644); err != nil {
+	if err := os.WriteFile(fullPath, data, 0600); err != nil {
 		return "", fmt.Errorf("write original: %w", err)
 	}
 	return filepath.Join(galleryID.String(), "originals", filename), nil
@@ -50,7 +50,7 @@ func (p *Processor) SaveOriginalFromReader(galleryID, photoID uuid.UUID, r io.Re
 	}
 	filename := photoID.String() + ext
 	fullPath := filepath.Join(dir, filename)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", 0, fmt.Errorf("create file: %w", err)
 	}
@@ -95,6 +95,7 @@ func (p *Processor) GenerateThumbnail(galleryID, photoID uuid.UUID, data []byte,
 	if err := imaging.Save(thumb, thumbFullPath, imaging.JPEGQuality(85)); err != nil {
 		return "", 0, 0, fmt.Errorf("save thumbnail: %w", err)
 	}
+	_ = os.Chmod(thumbFullPath, 0600)
 
 	relPath := filepath.Join(galleryID.String(), "thumbs", filename)
 	return relPath, origW, origH, nil
@@ -145,6 +146,7 @@ func (p *Processor) GenerateVideoThumbnail(galleryID, photoID uuid.UUID, inputPa
 				thumb = imaging.Fill(img, 600, 450, imaging.Center, imaging.Lanczos)
 			}
 			if err := imaging.Save(thumb, thumbFullPath, imaging.JPEGQuality(85)); err == nil {
+				_ = os.Chmod(thumbFullPath, 0600)
 				return relPath, nil
 			}
 		}
@@ -166,6 +168,7 @@ func (p *Processor) generatePlaceholderThumbnail(fullPath, relPath string, is360
 	if err := imaging.Save(img, fullPath, imaging.JPEGQuality(60)); err != nil {
 		return "", fmt.Errorf("save placeholder thumbnail: %w", err)
 	}
+	_ = os.Chmod(fullPath, 0600)
 	return relPath, nil
 }
 

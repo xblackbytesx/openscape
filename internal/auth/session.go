@@ -8,10 +8,8 @@ import (
 )
 
 const (
-	sessionName    = "openscape_session"
-	keyUserID      = "user_id"
-	keyFlashError  = "flash_error"
-	keyFlashSuccess = "flash_success"
+	sessionName = "openscape_session"
+	keyUserID   = "user_id"
 )
 
 var store *sessions.CookieStore
@@ -65,39 +63,3 @@ func ClearSession(w http.ResponseWriter, r *http.Request) error {
 	return store.Save(r, w, sess)
 }
 
-func SetFlashError(w http.ResponseWriter, r *http.Request, msg string) error {
-	sess, err := store.Get(r, sessionName)
-	if err != nil {
-		sess, _ = store.New(r, sessionName)
-	}
-	sess.AddFlash(msg, keyFlashError)
-	return store.Save(r, w, sess)
-}
-
-func SetFlashSuccess(w http.ResponseWriter, r *http.Request, msg string) error {
-	sess, err := store.Get(r, sessionName)
-	if err != nil {
-		sess, _ = store.New(r, sessionName)
-	}
-	sess.AddFlash(msg, keyFlashSuccess)
-	return store.Save(r, w, sess)
-}
-
-func GetFlashes(w http.ResponseWriter, r *http.Request) (errors []string, successes []string) {
-	sess, err := store.Get(r, sessionName)
-	if err != nil {
-		return nil, nil
-	}
-	for _, f := range sess.Flashes(keyFlashError) {
-		if s, ok := f.(string); ok {
-			errors = append(errors, s)
-		}
-	}
-	for _, f := range sess.Flashes(keyFlashSuccess) {
-		if s, ok := f.(string); ok {
-			successes = append(successes, s)
-		}
-	}
-	_ = store.Save(r, w, sess)
-	return errors, successes
-}
