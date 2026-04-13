@@ -119,12 +119,17 @@ func ExtractVideoMeta(filePath string) (*VideoMeta, error) {
 
 	var probe struct {
 		Streams []struct {
-			CodecType string `json:"codec_type"`
-			Width     int    `json:"width"`
-			Height    int    `json:"height"`
+			CodecType    string `json:"codec_type"`
+			Width        int    `json:"width"`
+			Height       int    `json:"height"`
+			SideDataList []struct {
+				SideDataType string `json:"side_data_type"`
+				Projection   string `json:"projection"`
+			} `json:"side_data_list"`
 		} `json:"streams"`
 		Format struct {
-			Duration string `json:"duration"`
+			Duration string            `json:"duration"`
+			Tags     map[string]string `json:"tags"`
 		} `json:"format"`
 	}
 	if err := json.Unmarshal(out, &probe); err != nil {
@@ -133,12 +138,31 @@ func ExtractVideoMeta(filePath string) (*VideoMeta, error) {
 
 	meta := &VideoMeta{}
 
-	// Find first video stream for dimensions
+	// Find first video stream for dimensions; also check spherical side-data
+	// (Spherical Video RFC — used by GoPro, Ricoh Theta, DJI, YouTube 360 exports).
 	for _, s := range probe.Streams {
-		if s.CodecType == "video" && s.Width > 0 && s.Height > 0 {
-			meta.Width = s.Width
-			meta.Height = s.Height
-			break
+		if s.CodecType == "video" {
+			if s.Width > 0 && s.Height > 0 && meta.Width == 0 {
+				meta.Width = s.Width
+				meta.Height = s.Height
+			}
+			for _, sd := range s.SideDataList {
+				if sd.SideDataType == "Spherical Mapping" &&
+					strings.EqualFold(sd.Projection, "equirectangular") {
+					meta.Is360 = true
+				}
+			}
+		}
+	}
+
+	// Format-level tags (some encoders write spherical info here).
+	if !meta.Is360 {
+		for k, v := range probe.Format.Tags {
+			kl, vl := strings.ToLower(k), strings.ToLower(v)
+			if strings.Contains(kl, "spherical") || strings.Contains(vl, "equirectangular") {
+				meta.Is360 = true
+				break
+			}
 		}
 	}
 
@@ -149,11 +173,13 @@ func ExtractVideoMeta(filePath string) (*VideoMeta, error) {
 		meta.Duration = int(dur + 0.5)
 	}
 
-	// 360 detection: XMP UUID atom only. Real 360° cameras (Insta360, GoPro MAX,
-	// Ricoh Theta) always embed XMP metadata. Aspect ratio is intentionally not
-	// used for videos — standard 16:9 (1.78:1) falls inside the 1.7–2.3 heuristic
-	// window and would falsely classify every HD video as equirectangular.
-	meta.Is360 = detectVideoIs360FromFile(filePath)
+	// XMP UUID atom fallback — catches Insta360 and cameras that don't follow
+	// the Spherical Video RFC but embed XMP in a custom MP4 UUID box.
+	// Aspect ratio is intentionally NOT used: 16:9 (1.78) falls inside any
+	// reasonable 2:1 tolerance window and causes false positives on every HD clip.
+	if !meta.Is360 {
+		meta.Is360 = detectVideoIs360FromFile(filePath)
+	}
 
 	return meta, nil
 }
