@@ -149,11 +149,11 @@ func ExtractVideoMeta(filePath string) (*VideoMeta, error) {
 		meta.Duration = int(dur + 0.5)
 	}
 
-	// 360 detection: scan raw file for XMP UUID atom first, then aspect ratio fallback
+	// 360 detection: XMP UUID atom only. Real 360° cameras (Insta360, GoPro MAX,
+	// Ricoh Theta) always embed XMP metadata. Aspect ratio is intentionally not
+	// used for videos — standard 16:9 (1.78:1) falls inside the 1.7–2.3 heuristic
+	// window and would falsely classify every HD video as equirectangular.
 	meta.Is360 = detectVideoIs360FromFile(filePath)
-	if !meta.Is360 && meta.Width > 0 && meta.Height > 0 {
-		meta.Is360 = Detect360FromAspectRatio(meta.Width, meta.Height)
-	}
 
 	return meta, nil
 }

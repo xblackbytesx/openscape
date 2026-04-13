@@ -45,12 +45,13 @@ templ PSV360VideoViewer(photo *domain.Photo) {
 	<script type="module">
 		import { Viewer } from '@photo-sphere-viewer/core';
 		import { AutorotatePlugin } from '@photo-sphere-viewer/autorotate-plugin';
-		import { VideoPlugin, VideoAdapter } from '@photo-sphere-viewer/video-plugin';
+		import { VideoPlugin } from '@photo-sphere-viewer/video-plugin';
+		import { EquirectangularVideoAdapter } from '@photo-sphere-viewer/equirectangular-video-adapter';
 
 		const container = document.getElementById('psv-video-container');
 		new Viewer({
 			container: container,
-			adapter: VideoAdapter,
+			adapter: EquirectangularVideoAdapter,
 			panorama: {
 				source: container.dataset.src,
 				poster: container.dataset.poster,
