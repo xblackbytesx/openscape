@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +38,29 @@ func (p *Processor) SaveOriginal(galleryID, photoID uuid.UUID, data []byte, ext 
 		return "", fmt.Errorf("write original: %w", err)
 	}
 	return filepath.Join(galleryID.String(), "originals", filename), nil
+}
+
+// SaveOriginalFromReader streams an upload directly from r to the originals
+// directory without buffering the whole file in RAM. Returns the relative path
+// and the number of bytes written.
+func (p *Processor) SaveOriginalFromReader(galleryID, photoID uuid.UUID, r io.Reader, ext string) (string, int64, error) {
+	dir := filepath.Join(p.uploadsPath, galleryID.String(), "originals")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", 0, fmt.Errorf("create originals dir: %w", err)
+	}
+	filename := photoID.String() + ext
+	fullPath := filepath.Join(dir, filename)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return "", 0, fmt.Errorf("create file: %w", err)
+	}
+	defer f.Close()
+	n, err := io.Copy(f, r)
+	if err != nil {
+		_ = os.Remove(fullPath)
+		return "", 0, fmt.Errorf("write original: %w", err)
+	}
+	return filepath.Join(galleryID.String(), "originals", filename), n, nil
 }
 
 // GenerateThumbnail creates a thumbnail from image data.
@@ -76,8 +101,9 @@ func (p *Processor) GenerateThumbnail(galleryID, photoID uuid.UUID, data []byte,
 }
 
 // GenerateVideoThumbnail extracts a frame from a video file using ffmpeg and
-// saves it as a JPEG thumbnail.  The input path must be an absolute filesystem
-// path to the saved original video.  Returns the relative thumb path.
+// saves it as a JPEG thumbnail.  Falls back to a dark placeholder image if
+// ffmpeg is unavailable or fails, so the caller always gets a valid JPEG path.
+// The input path must be an absolute filesystem path to the saved original video.
 func (p *Processor) GenerateVideoThumbnail(galleryID, photoID uuid.UUID, inputPath string, is360 bool) (string, error) {
 	dir := filepath.Join(p.uploadsPath, galleryID.String(), "thumbs")
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -88,47 +114,58 @@ func (p *Processor) GenerateVideoThumbnail(galleryID, photoID uuid.UUID, inputPa
 	thumbFullPath := filepath.Join(dir, filename)
 	relPath := filepath.Join(galleryID.String(), "thumbs", filename)
 
-	// Extract a single frame at 1 second (seek before input for speed).
-	// If the video is shorter than 1 second the -ss flag silently clamps to 0.
-	err := exec.Command("ffmpeg",
-		"-ss", "1",
-		"-i", inputPath,
-		"-vframes", "1",
-		"-q:v", "2",
-		"-y",
-		thumbFullPath,
-	).Run()
-	if err != nil {
-		// Try at time 0 (very short videos)
-		err = exec.Command("ffmpeg",
+	// Try to extract frame at 1 second first, then at 0 for very short clips.
+	// Capture stderr so failures surface in logs rather than being silent.
+	ffmpegOK := false
+	for _, seek := range []string{"1", "0"} {
+		var stderr bytes.Buffer
+		cmd := exec.Command("ffmpeg",
+			"-ss", seek,
 			"-i", inputPath,
 			"-vframes", "1",
 			"-q:v", "2",
 			"-y",
 			thumbFullPath,
-		).Run()
-		if err != nil {
-			return "", fmt.Errorf("ffmpeg thumbnail: %w", err)
+		)
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err == nil {
+			ffmpegOK = true
+			break
 		}
 	}
 
-	// Resize the extracted frame using imaging (same logic as photo thumbnails)
-	img, err := imaging.Open(thumbFullPath)
-	if err != nil {
-		return "", fmt.Errorf("open video frame: %w", err)
+	if ffmpegOK {
+		// Resize the extracted frame using imaging (same logic as photo thumbnails)
+		img, err := imaging.Open(thumbFullPath)
+		if err == nil {
+			var thumb image.Image
+			if is360 {
+				thumb = imaging.Fill(img, 800, 400, imaging.Center, imaging.Lanczos)
+			} else {
+				thumb = imaging.Fill(img, 600, 450, imaging.Center, imaging.Lanczos)
+			}
+			if err := imaging.Save(thumb, thumbFullPath, imaging.JPEGQuality(85)); err == nil {
+				return relPath, nil
+			}
+		}
 	}
 
-	var thumb image.Image
+	// ffmpeg unavailable or failed — generate a dark placeholder JPEG so that
+	// the gallery card renders something instead of a broken-image icon.
+	return p.generatePlaceholderThumbnail(thumbFullPath, relPath, is360)
+}
+
+// generatePlaceholderThumbnail writes a solid dark-colour JPEG as a fallback
+// thumbnail for videos whose frames could not be extracted.
+func (p *Processor) generatePlaceholderThumbnail(fullPath, relPath string, is360 bool) (string, error) {
+	w, h := 600, 450
 	if is360 {
-		thumb = imaging.Fill(img, 800, 400, imaging.Center, imaging.Lanczos)
-	} else {
-		thumb = imaging.Fill(img, 600, 450, imaging.Center, imaging.Lanczos)
+		w, h = 800, 400
 	}
-
-	if err := imaging.Save(thumb, thumbFullPath, imaging.JPEGQuality(85)); err != nil {
-		return "", fmt.Errorf("save video thumbnail: %w", err)
+	img := imaging.New(w, h, color.NRGBA{R: 18, G: 18, B: 18, A: 255})
+	if err := imaging.Save(img, fullPath, imaging.JPEGQuality(60)); err != nil {
+		return "", fmt.Errorf("save placeholder thumbnail: %w", err)
 	}
-
 	return relPath, nil
 }
 

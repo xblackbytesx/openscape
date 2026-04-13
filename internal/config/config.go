@@ -23,7 +23,7 @@ func Load() (*Config, error) {
 		Port:             getEnvDefault("PORT", "8080"),
 		SecureCookies:    os.Getenv("SECURE_COOKIES") == "true",
 		AllowRegistration: os.Getenv("ALLOW_REGISTRATION") == "true",
-		MaxUploadMB:      parseIntDefault("MAX_UPLOAD_MB", 100),
+		MaxUploadMB:      parseIntDefault("MAX_UPLOAD_MB", 2000),
 		UploadsPath:      getEnvDefault("UPLOADS_PATH", "/app/data/uploads"),
 	}
 

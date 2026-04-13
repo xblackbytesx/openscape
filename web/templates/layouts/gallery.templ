@@ -57,7 +57,7 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 						hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
 						hx-encoding="multipart/form-data"
 						hx-swap="none"
-						hx-on::after-request="if(event.detail.successful) window.location.reload()"
+						hx-on::after-request="if(event.detail.successful){window.location.reload()}else{var m='Upload failed.';try{m=JSON.parse(event.detail.xhr.responseText).error||m;}catch(e){}alert(m);}"
 						style="display:none"
 					>
 						<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -68,7 +68,7 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 							multiple
 							accept="image/*,.heic,.heif,video/*"
 							style="display:none"
-							onchange="document.getElementById('fab-upload-form').dispatchEvent(new Event('submit', {bubbles:true}))"
+							onchange="document.getElementById('fab-upload-form').requestSubmit()"
 						/>
 					</form>
 				</div>

@@ -62,6 +62,32 @@ func IsAllowedMIME(mime string) bool {
 	return allowed[mime]
 }
 
+// MIMEFromExtension maps common file extensions to MIME types for cases where
+// content sniffing returns "application/octet-stream" (e.g. some MOV/MP4 variants).
+func MIMEFromExtension(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".mp4", ".m4v":
+		return "video/mp4"
+	case ".mov":
+		return "video/quicktime"
+	case ".webm":
+		return "video/webm"
+	case ".ogv", ".ogg":
+		return "video/ogg"
+	case ".avi":
+		return "video/x-msvideo"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".heic", ".heif":
+		return "image/heic"
+	}
+	return ""
+}
+
 // ExtractMetadata parses image data and returns metadata.
 // Uses lightweight string search for XMP — avoids heavy EXIF library startup cost.
 func ExtractMetadata(data []byte, mime string) *ImageMeta {

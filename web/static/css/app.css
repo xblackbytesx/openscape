@@ -865,15 +865,40 @@ body {
     height: 0;
 }
 .upload-progress {
-    margin-top: var(--sp-3);
+    align-items: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     color: var(--text-secondary);
     font-size: var(--text-sm);
+}
+/* Override the generic htmx-indicator display:block to use flex */
+.upload-progress.htmx-indicator.htmx-request {
+    display: flex;
+}
+.upload-progress__spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.upload-progress__text {
+    line-height: 1.4;
 }
 /* HTMX indicator: hidden by default, visible during request */
 .htmx-indicator {
     display: none;
 }
-.htmx-request .htmx-indicator {
+.htmx-indicator.htmx-request {
     display: block;
 }
 
