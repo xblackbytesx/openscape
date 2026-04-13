@@ -18,15 +18,15 @@ templ UploadZone(gallery *domain.Gallery, csrfToken string) {
 					<polyline points="17 8 12 3 7 8"/>
 					<line x1="12" y1="3" x2="12" y2="15"/>
 				</svg>
-				<p class="upload-zone__text">Drop photos here or <span class="upload-zone__browse">browse</span></p>
-				<p class="upload-zone__hint">JPEG, PNG, WEBP, HEIC · 360° photos auto-detected</p>
+				<p class="upload-zone__text">Drop photos or videos here or <span class="upload-zone__browse">browse</span></p>
+				<p class="upload-zone__hint">JPEG, PNG, WEBP, HEIC, MP4, MOV, WEBM · 360° auto-detected</p>
 			</label>
 			<input
 				id="upload-input"
 				type="file"
 				name="photos"
 				multiple
-				accept="image/*,.heic,.heif"
+				accept="image/*,.heic,.heif,video/*"
 				class="upload-zone__input"
 				onchange="this.form.requestSubmit()"
 			/>

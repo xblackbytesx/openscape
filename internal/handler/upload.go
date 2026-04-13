@@ -91,7 +91,7 @@ func (h *UploadHandler) Upload(c *echo.Context) error {
 	}
 
 	if uploaded == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "No valid images could be uploaded"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "No valid files could be uploaded"})
 	}
 
 	if isHTMX(c) {
@@ -125,10 +125,30 @@ func (h *UploadHandler) processUpload(ctx context.Context, gallery *domain.Galle
 	if ext == "" {
 		ext = strings.ToLower(filepath.Ext(filename))
 		if ext == "" {
-			ext = ".jpg"
+			ext = ".bin"
 		}
 	}
 
+	sortOrder, _ := h.photos.GetNextSortOrder(ctx, gallery.ID)
+	fileSize := int64(len(data))
+
+	if strings.HasPrefix(mimeType, "video/") {
+		return h.processVideoUpload(ctx, gallery, uploaderID, filename, data, mimeType, ext, photoID, fileSize, sortOrder)
+	}
+	return h.processImageUpload(ctx, gallery, uploaderID, filename, data, mimeType, ext, photoID, fileSize, sortOrder)
+}
+
+func (h *UploadHandler) processImageUpload(
+	ctx context.Context,
+	gallery *domain.Gallery,
+	uploaderID uuid.UUID,
+	filename string,
+	data []byte,
+	mimeType, ext string,
+	photoID uuid.UUID,
+	fileSize int64,
+	sortOrder int,
+) error {
 	// Extract metadata
 	meta := media.ExtractMetadata(data, mimeType)
 
@@ -149,15 +169,11 @@ func (h *UploadHandler) processUpload(ctx context.Context, gallery *domain.Galle
 	// Generate thumbnail
 	thumbPath, width, height, err := h.processor.GenerateThumbnail(gallery.ID, photoID, data, meta.Is360)
 	if err != nil {
-		// Non-fatal: use storage path as thumb placeholder
 		thumbPath = storagePath
 		width = 0
 		height = 0
 	}
 
-	sortOrder, _ := h.photos.GetNextSortOrder(ctx, gallery.ID)
-
-	fileSize := int64(len(data))
 	p := &domain.Photo{
 		GalleryID:   gallery.ID,
 		UploadedBy:  uploaderID,
@@ -176,6 +192,67 @@ func (h *UploadHandler) processUpload(ctx context.Context, gallery *domain.Galle
 	if width > 0 {
 		p.Width = &width
 		p.Height = &height
+	}
+
+	_, err = h.photos.Create(ctx, p)
+	return err
+}
+
+func (h *UploadHandler) processVideoUpload(
+	ctx context.Context,
+	gallery *domain.Gallery,
+	uploaderID uuid.UUID,
+	filename string,
+	data []byte,
+	mimeType, ext string,
+	photoID uuid.UUID,
+	fileSize int64,
+	sortOrder int,
+) error {
+	// Save original first (ffprobe/ffmpeg need a real file path)
+	storagePath, err := h.processor.SaveOriginal(gallery.ID, photoID, data, ext)
+	if err != nil {
+		return fmt.Errorf("save video original: %w", err)
+	}
+
+	absPath := h.processor.ServeOriginalPath(storagePath)
+
+	// Extract video metadata via ffprobe
+	vmeta, err := media.ExtractVideoMeta(absPath)
+	if err != nil {
+		// Non-fatal — store without dimensions/duration/360 info
+		vmeta = &media.VideoMeta{}
+	}
+
+	// Generate thumbnail frame
+	thumbPath, err := h.processor.GenerateVideoThumbnail(gallery.ID, photoID, absPath, vmeta.Is360)
+	if err != nil {
+		// Fall back to using the original path as thumb (no preview)
+		thumbPath = storagePath
+	}
+
+	p := &domain.Photo{
+		GalleryID:   gallery.ID,
+		UploadedBy:  uploaderID,
+		Filename:    filename,
+		StoragePath: storagePath,
+		ThumbPath:   thumbPath,
+		FileSize:    &fileSize,
+		MimeType:    mimeType,
+		Is360:       vmeta.Is360,
+		ExifData:    map[string]any{},
+		SortOrder:   sortOrder,
+	}
+	if vmeta.Is360 {
+		proj := "equirectangular"
+		p.ProjectionType = &proj
+	}
+	if vmeta.Width > 0 {
+		p.Width = &vmeta.Width
+		p.Height = &vmeta.Height
+	}
+	if vmeta.Duration > 0 {
+		p.Duration = &vmeta.Duration
 	}
 
 	_, err = h.photos.Create(ctx, p)
@@ -318,6 +395,16 @@ func extensionForMIME(mime string) string {
 		return ".webp"
 	case "image/heic", "image/heif":
 		return ".heic"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	case "video/ogg":
+		return ".ogv"
+	case "video/x-msvideo":
+		return ".avi"
 	}
-	return ".jpg"
+	return ""
 }

@@ -19,7 +19,8 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 						"three": "/static/vendor/psv/three.module.js",
 						"@photo-sphere-viewer/core": "/static/vendor/psv/core.esm.js",
 						"@photo-sphere-viewer/autorotate-plugin": "/static/vendor/psv/autorotate.esm.js",
-						"@photo-sphere-viewer/compass-plugin": "/static/vendor/psv/compass.esm.js"
+						"@photo-sphere-viewer/compass-plugin": "/static/vendor/psv/compass.esm.js",
+						"@photo-sphere-viewer/video-plugin": "/static/vendor/psv/video-plugin.esm.js"
 					}
 				}
 			</script>
@@ -65,7 +66,7 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 							type="file"
 							name="photos"
 							multiple
-							accept="image/*,.heic,.heif"
+							accept="image/*,.heic,.heif,video/*"
 							style="display:none"
 							onchange="document.getElementById('fab-upload-form').dispatchEvent(new Event('submit', {bubbles:true}))"
 						/>

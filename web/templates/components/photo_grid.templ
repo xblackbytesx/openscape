@@ -12,9 +12,9 @@ templ PhotoGrid(photos []*domain.Photo, gallerySlug string, canEdit bool, csrfTo
 					<polyline points="21 15 16 10 5 21"/>
 				</svg>
 			</div>
-			<p class="empty-state__text">No photos yet.</p>
+			<p class="empty-state__text">No photos or videos yet.</p>
 			if canEdit {
-				<p class="empty-state__hint">Upload your first photo using the button above.</p>
+				<p class="empty-state__hint">Upload your first photo or video using the button above.</p>
 			}
 		</div>
 	} else {

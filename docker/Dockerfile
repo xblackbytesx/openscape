@@ -17,6 +17,8 @@ RUN npm install --prefix /tmp/web && \
                                                                       web/static/vendor/psv/autorotate.esm.js && \
     cp /tmp/web/node_modules/@photo-sphere-viewer/compass-plugin/index.module.js \
                                                                       web/static/vendor/psv/compass.esm.js && \
+    cp /tmp/web/node_modules/@photo-sphere-viewer/video-plugin/index.module.js \
+                                                                      web/static/vendor/psv/video-plugin.esm.js && \
     CSS=$(find /tmp/web/node_modules/@photo-sphere-viewer/core -maxdepth 3 -name "*.css" | head -1) && \
     cp "$CSS" web/static/vendor/psv/photo-sphere-viewer.css && \
     rm -rf /tmp/web
@@ -38,7 +40,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o openscape ./cmd/openscape
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata && \
+RUN apk add --no-cache ca-certificates tzdata ffmpeg && \
     addgroup -g 1000 openscape && \
     adduser -u 1000 -G openscape -D -H openscape
 
