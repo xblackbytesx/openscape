@@ -1,6 +1,6 @@
 FROM golang:1.25-alpine
 
-RUN apk add --no-cache git curl nodejs npm
+RUN apk add --no-cache git curl nodejs npm ffmpeg
 
 WORKDIR /app
 
@@ -22,6 +22,10 @@ RUN npm install --prefix /tmp/web && \
                                                                       web/static/vendor/psv/autorotate.esm.js && \
     cp /tmp/web/node_modules/@photo-sphere-viewer/compass-plugin/index.module.js \
                                                                       web/static/vendor/psv/compass.esm.js && \
+    cp /tmp/web/node_modules/@photo-sphere-viewer/equirectangular-video-adapter/index.module.js \
+                                                                      web/static/vendor/psv/equirectangular-video-adapter.esm.js && \
+    cp /tmp/web/node_modules/@photo-sphere-viewer/video-plugin/index.module.js \
+                                                                      web/static/vendor/psv/video-plugin.esm.js && \
     CSS=$(find /tmp/web/node_modules/@photo-sphere-viewer/core -maxdepth 3 -name "*.css" | head -1) && \
     cp "$CSS" web/static/vendor/psv/photo-sphere-viewer.css && \
     rm -rf /tmp/web

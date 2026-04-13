@@ -8,31 +8,32 @@ templ UploadZone(gallery *domain.Gallery, csrfToken string) {
 			hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
 			hx-encoding="multipart/form-data"
 			hx-indicator="#upload-progress"
-			hx-on::after-request="if(event.detail.successful) window.location.reload()"
+			hx-on::after-request="if(event.detail.successful){window.location.reload()}else{var m='Upload failed.';try{m=JSON.parse(event.detail.xhr.responseText).error||m;}catch(e){}alert(m);}"
 			enctype="multipart/form-data"
 		>
 			<input type="hidden" name="_csrf" value={ csrfToken }/>
-			<label for="upload-input" class="upload-zone__label">
+			<label for="upload-input" class="upload-zone__label" id="upload-zone-label">
 				<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
 					<polyline points="17 8 12 3 7 8"/>
 					<line x1="12" y1="3" x2="12" y2="15"/>
 				</svg>
-				<p class="upload-zone__text">Drop photos here or <span class="upload-zone__browse">browse</span></p>
-				<p class="upload-zone__hint">JPEG, PNG, WEBP, HEIC · 360° photos auto-detected</p>
+				<p class="upload-zone__text">Drop photos or videos here or <span class="upload-zone__browse">browse</span></p>
+				<p class="upload-zone__hint">JPEG, PNG, WEBP, HEIC, MP4, MOV, WEBM · 360° auto-detected</p>
 			</label>
 			<input
 				id="upload-input"
 				type="file"
 				name="photos"
 				multiple
-				accept="image/*,.heic,.heif"
+				accept="image/*,.heic,.heif,video/*"
 				class="upload-zone__input"
 				onchange="this.form.requestSubmit()"
 			/>
 		</form>
 		<div id="upload-progress" class="upload-progress htmx-indicator">
-			<span>Uploading...</span>
+			<div class="upload-progress__spinner"></div>
+			<span class="upload-progress__text">Uploading… this may take a while for large videos</span>
 		</div>
 	</div>
 }

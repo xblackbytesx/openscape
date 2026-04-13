@@ -8,6 +8,9 @@ templ PhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken str
 			if p.Is360 {
 				<div class="photo-card__thumb photo-card__thumb--panoramic" style={ "background-image:url(" + p.ThumbURL() + ")" }>
 					<span class="photo-card__badge">360°</span>
+					if p.IsVideo() {
+						@videoOverlay(p)
+					}
 					<div class="photo-card__overlay">
 						if p.Title != "" {
 							<p class="photo-card__title">{ p.Title }</p>
@@ -22,6 +25,9 @@ templ PhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken str
 						class="photo-card__img"
 						loading="lazy"
 					/>
+					if p.IsVideo() {
+						@videoOverlay(p)
+					}
 					<div class="photo-card__overlay">
 						if p.Title != "" {
 							<p class="photo-card__title">{ p.Title }</p>
@@ -35,11 +41,11 @@ templ PhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken str
 				<button
 					class="btn-icon btn-icon--danger"
 					hx-delete={ "/admin/galleries/" + p.GalleryID.String() + "/photos/" + p.ID.String() }
-					hx-confirm="Delete this photo permanently?"
+					hx-confirm="Delete this item permanently?"
 					hx-target="closest .photo-card"
 					hx-swap="outerHTML swap:0.3s"
 					hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
-					title="Delete photo"
+					title="Delete"
 				>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<polyline points="3 6 5 6 21 6"/>
@@ -47,18 +53,33 @@ templ PhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken str
 						<path d="M10 11v6M14 11v6"/>
 					</svg>
 				</button>
-				<button
-					class="btn-icon"
-					hx-post={ "/admin/galleries/" + p.GalleryID.String() + "/cover/" + p.ID.String() }
-					hx-swap="none"
-					hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
-					title="Set as cover"
-				>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-					</svg>
-				</button>
+				if !p.IsVideo() {
+					<button
+						class="btn-icon"
+						hx-post={ "/admin/galleries/" + p.GalleryID.String() + "/cover/" + p.ID.String() }
+						hx-swap="none"
+						hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+						title="Set as cover"
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+						</svg>
+					</button>
+				}
 			</div>
 		}
 	</article>
+}
+
+// videoOverlay renders the play button icon and optional duration badge over a thumbnail.
+templ videoOverlay(p *domain.Photo) {
+	<div class="photo-card__video-overlay">
+		<svg class="photo-card__play-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+			<circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.55)"/>
+			<polygon points="10,8 18,12 10,16" fill="white"/>
+		</svg>
+		if p.FormatDuration() != "" {
+			<span class="photo-card__duration">{ p.FormatDuration() }</span>
+		}
+	</div>
 }

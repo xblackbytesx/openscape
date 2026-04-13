@@ -34,6 +34,42 @@ templ PSVViewer(photo *domain.Photo) {
 	</script>
 }
 
+// PSV360VideoViewer renders an equirectangular 360° video using PSV Video Plugin.
+templ PSV360VideoViewer(photo *domain.Photo) {
+	<div
+		id="psv-video-container"
+		class="psv-container"
+		data-src={ photo.OriginalURL() }
+		data-poster={ photo.ThumbURL() }
+	></div>
+	<script type="module">
+		import { Viewer } from '@photo-sphere-viewer/core';
+		import { AutorotatePlugin } from '@photo-sphere-viewer/autorotate-plugin';
+		import { VideoPlugin } from '@photo-sphere-viewer/video-plugin';
+		import { EquirectangularVideoAdapter } from '@photo-sphere-viewer/equirectangular-video-adapter';
+
+		const container = document.getElementById('psv-video-container');
+		new Viewer({
+			container: container,
+			adapter: EquirectangularVideoAdapter,
+			panorama: {
+				source: container.dataset.src,
+				poster: container.dataset.poster,
+			},
+			defaultZoomLvl: 50,
+			navbar: ['autorotate', 'video', 'zoom', 'fullscreen'],
+			plugins: [
+				VideoPlugin,
+				[AutorotatePlugin, {
+					autostartDelay: null,
+					autostartOnIdle: false,
+					autorotateSpeed: '0.5rpm',
+				}],
+			],
+		});
+	</script>
+}
+
 templ FlatPhotoViewer(photo *domain.Photo) {
 	<div class="flat-viewer" id="flat-viewer">
 		<img
@@ -76,5 +112,20 @@ templ FlatPhotoViewer(photo *domain.Photo) {
 				});
 			})();
 		</script>
+	</div>
+}
+
+// FlatVideoViewer renders a standard HTML5 video player for non-360 video files.
+templ FlatVideoViewer(photo *domain.Photo) {
+	<div class="flat-video-wrap" id="flat-viewer">
+		<video
+			class="flat-video-player"
+			controls
+			preload="metadata"
+			poster={ photo.ThumbURL() }
+		>
+			<source src={ photo.OriginalURL() } type={ photo.MimeType }/>
+			Your browser does not support HTML5 video.
+		</video>
 	</div>
 }

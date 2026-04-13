@@ -19,7 +19,9 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 						"three": "/static/vendor/psv/three.module.js",
 						"@photo-sphere-viewer/core": "/static/vendor/psv/core.esm.js",
 						"@photo-sphere-viewer/autorotate-plugin": "/static/vendor/psv/autorotate.esm.js",
-						"@photo-sphere-viewer/compass-plugin": "/static/vendor/psv/compass.esm.js"
+						"@photo-sphere-viewer/compass-plugin": "/static/vendor/psv/compass.esm.js",
+						"@photo-sphere-viewer/equirectangular-video-adapter": "/static/vendor/psv/equirectangular-video-adapter.esm.js",
+				"@photo-sphere-viewer/video-plugin": "/static/vendor/psv/video-plugin.esm.js"
 					}
 				}
 			</script>
@@ -56,7 +58,7 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 						hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
 						hx-encoding="multipart/form-data"
 						hx-swap="none"
-						hx-on::after-request="if(event.detail.successful) window.location.reload()"
+						hx-on::after-request="if(event.detail.successful){window.location.reload()}else{var m='Upload failed.';try{m=JSON.parse(event.detail.xhr.responseText).error||m;}catch(e){}alert(m);}"
 						style="display:none"
 					>
 						<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -65,9 +67,9 @@ templ GalleryLayout(title string, csrfToken string, gallery *domain.Gallery, use
 							type="file"
 							name="photos"
 							multiple
-							accept="image/*,.heic,.heif"
+							accept="image/*,.heic,.heif,video/*"
 							style="display:none"
-							onchange="document.getElementById('fab-upload-form').dispatchEvent(new Event('submit', {bubbles:true}))"
+							onchange="document.getElementById('fab-upload-form').requestSubmit()"
 						/>
 					</form>
 				</div>

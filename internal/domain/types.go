@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -85,6 +87,7 @@ type Photo struct {
 	ProjectionType *string
 	ExifData       map[string]any
 	CapturedAt     *time.Time
+	Duration       *int // seconds; nil for images
 	SortOrder      int
 	CreatedAt      time.Time
 }
@@ -113,6 +116,31 @@ func (p *Photo) DisplayTitle() string {
 		return p.Title
 	}
 	return p.Filename
+}
+
+// IsVideo returns true when the media item is a video file.
+func (p *Photo) IsVideo() bool {
+	return strings.HasPrefix(p.MimeType, "video/")
+}
+
+// VideoType returns "360" for equirectangular video, "flat" for ordinary video, "" for images.
+func (p *Photo) VideoType() string {
+	if !p.IsVideo() {
+		return ""
+	}
+	if p.Is360 {
+		return "360"
+	}
+	return "flat"
+}
+
+// FormatDuration formats Duration (seconds) as m:ss, or "" if nil.
+func (p *Photo) FormatDuration() string {
+	if p.Duration == nil {
+		return ""
+	}
+	d := *p.Duration
+	return fmt.Sprintf("%d:%02d", d/60, d%60)
 }
 
 type GallerySession struct {

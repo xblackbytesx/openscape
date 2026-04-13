@@ -442,6 +442,8 @@ body {
 /* ── 360 Thumbnail Panning — background-image approach ── */
 /* 16:9 ratio keeps the grid consistent; 400% zoom shows ~90° FOV at once */
 .photo-card__thumb--panoramic {
+    position: relative;
+    overflow: hidden;
     aspect-ratio: 16 / 9;
     background-size: 300% auto;
     background-position: 0% 60%;
@@ -863,15 +865,40 @@ body {
     height: 0;
 }
 .upload-progress {
-    margin-top: var(--sp-3);
+    align-items: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     color: var(--text-secondary);
     font-size: var(--text-sm);
+}
+/* Override the generic htmx-indicator display:block to use flex */
+.upload-progress.htmx-indicator.htmx-request {
+    display: flex;
+}
+.upload-progress__spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.upload-progress__text {
+    line-height: 1.4;
 }
 /* HTMX indicator: hidden by default, visible during request */
 .htmx-indicator {
     display: none;
 }
-.htmx-request .htmx-indicator {
+.htmx-indicator.htmx-request {
     display: block;
 }
 
@@ -1215,4 +1242,79 @@ body {
     .galleries-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ── Video support ── */
+
+/* Play icon + duration overlay on video thumbnails */
+.photo-card__video-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.photo-card__play-icon {
+    width: 48px;
+    height: 48px;
+    opacity: 0.9;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.photo-card:hover .photo-card__play-icon {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.photo-card__duration {
+    position: absolute;
+    bottom: var(--sp-2);
+    right: var(--sp-2);
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* Flat video player */
+.flat-video-wrap {
+    width: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flat-video-player {
+    width: 100%;
+    max-height: 80vh;
+    background: #000;
+    display: block;
+    outline: none;
+}
+
+/* Duration badge on photo detail view */
+.badge--duration {
+    background: rgba(255,255,255,0.15);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* PSV container for 360 video (same as photo — already full-viewport) */
+#psv-video-container {
+    width: 100%;
+    height: 100%;
 }

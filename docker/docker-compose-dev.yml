@@ -16,7 +16,7 @@ services:
       PORT: "8080"
       SECURE_COOKIES: "false"
       ALLOW_REGISTRATION: "true"
-      MAX_UPLOAD_MB: "100"
+      MAX_UPLOAD_MB: "2000"
       UPLOADS_PATH: /app/data/uploads
     volumes:
       - ..:/app

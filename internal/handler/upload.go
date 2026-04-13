@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -74,24 +75,21 @@ func (h *UploadHandler) Upload(c *echo.Context) error {
 	}
 
 	var uploaded int
+	var lastErr string
 	for _, fh := range files {
-		f, err := fh.Open()
-		if err != nil {
-			continue
-		}
-		data, err := io.ReadAll(f)
-		f.Close()
-		if err != nil {
-			continue
-		}
-		if err := h.processUpload(ctx, gallery, user.ID, fh.Filename, data); err != nil {
+		if err := h.processFileHeader(ctx, gallery, user.ID, fh); err != nil {
+			lastErr = err.Error()
 			continue
 		}
 		uploaded++
 	}
 
 	if uploaded == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "No valid images could be uploaded"})
+		msg := "No valid files could be uploaded"
+		if lastErr != "" {
+			msg = lastErr
+		}
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": msg})
 	}
 
 	if isHTMX(c) {
@@ -101,38 +99,73 @@ func (h *UploadHandler) Upload(c *echo.Context) error {
 	return c.Redirect(http.StatusFound, "/admin/galleries/"+galleryID.String())
 }
 
-func (h *UploadHandler) processUpload(ctx context.Context, gallery *domain.Gallery, uploaderID uuid.UUID, filename string, data []byte) error {
-	// Detect MIME from file content
-	mimeType, combinedReader, err := media.DetectMIME(bytes.NewReader(data))
+// processFileHeader handles one multipart file. Videos are streamed straight to
+// disk (no full-file RAM buffer). Images are read into RAM for in-process decoding.
+func (h *UploadHandler) processFileHeader(ctx context.Context, gallery *domain.Gallery, uploaderID uuid.UUID, fh *multipart.FileHeader) error {
+	f, err := fh.Open()
 	if err != nil {
-		return fmt.Errorf("detect mime: %w", err)
+		return fmt.Errorf("open upload: %w", err)
 	}
-	// Re-read full data after MIME detection
-	fullData, err := io.ReadAll(combinedReader)
-	if err != nil {
-		return err
+	defer f.Close()
+
+	// Peek at first 512 bytes for MIME sniffing without buffering the whole file.
+	peek := make([]byte, 512)
+	n, err := io.ReadFull(f, peek)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return fmt.Errorf("read peek: %w", err)
 	}
-	data = fullData
+	peek = peek[:n]
+
+	mimeType := http.DetectContentType(peek)
+
+	// Fallback: content sniffing returns octet-stream for many video containers
+	// (e.g. QuickTime MOV, some H.265 MP4s). Use the file extension instead.
+	if mimeType == "application/octet-stream" || mimeType == "application/zip" {
+		ext := strings.ToLower(filepath.Ext(fh.Filename))
+		if m := media.MIMEFromExtension(ext); m != "" {
+			mimeType = m
+		}
+	}
 
 	if !media.IsAllowedMIME(mimeType) {
 		return fmt.Errorf("unsupported file type: %s", mimeType)
 	}
 
-	photoID := uuid.New()
+	// Reconstruct a full reader: the peeked bytes + the rest of the file.
+	full := io.MultiReader(bytes.NewReader(peek), f)
 
-	// Determine extension
+	photoID := uuid.New()
 	ext := extensionForMIME(mimeType)
 	if ext == "" {
-		ext = strings.ToLower(filepath.Ext(filename))
+		ext = strings.ToLower(filepath.Ext(fh.Filename))
 		if ext == "" {
-			ext = ".jpg"
+			ext = ".bin"
 		}
 	}
 
-	// Extract metadata
-	meta := media.ExtractMetadata(data, mimeType)
+	sortOrder, _ := h.photos.GetNextSortOrder(ctx, gallery.ID)
 
-	// Aspect ratio 360 fallback
+	if strings.HasPrefix(mimeType, "video/") {
+		return h.processVideoStream(ctx, gallery, uploaderID, fh.Filename, mimeType, ext, photoID, sortOrder, full)
+	}
+	return h.processImageStream(ctx, gallery, uploaderID, fh.Filename, mimeType, ext, photoID, sortOrder, full)
+}
+
+func (h *UploadHandler) processImageStream(
+	ctx context.Context,
+	gallery *domain.Gallery,
+	uploaderID uuid.UUID,
+	filename, mimeType, ext string,
+	photoID uuid.UUID,
+	sortOrder int,
+	r io.Reader,
+) error {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("read image: %w", err)
+	}
+
+	meta := media.ExtractMetadata(data, mimeType)
 	if !meta.Is360 && meta.Width > 0 && meta.Height > 0 {
 		if media.Detect360FromAspectRatio(meta.Width, meta.Height) {
 			meta.Is360 = true
@@ -140,22 +173,16 @@ func (h *UploadHandler) processUpload(ctx context.Context, gallery *domain.Galle
 		}
 	}
 
-	// Save original
 	storagePath, err := h.processor.SaveOriginal(gallery.ID, photoID, data, ext)
 	if err != nil {
 		return fmt.Errorf("save original: %w", err)
 	}
 
-	// Generate thumbnail
 	thumbPath, width, height, err := h.processor.GenerateThumbnail(gallery.ID, photoID, data, meta.Is360)
 	if err != nil {
-		// Non-fatal: use storage path as thumb placeholder
 		thumbPath = storagePath
-		width = 0
-		height = 0
+		width, height = 0, 0
 	}
-
-	sortOrder, _ := h.photos.GetNextSortOrder(ctx, gallery.ID)
 
 	fileSize := int64(len(data))
 	p := &domain.Photo{
@@ -177,7 +204,64 @@ func (h *UploadHandler) processUpload(ctx context.Context, gallery *domain.Galle
 		p.Width = &width
 		p.Height = &height
 	}
+	_, err = h.photos.Create(ctx, p)
+	return err
+}
 
+func (h *UploadHandler) processVideoStream(
+	ctx context.Context,
+	gallery *domain.Gallery,
+	uploaderID uuid.UUID,
+	filename, mimeType, ext string,
+	photoID uuid.UUID,
+	sortOrder int,
+	r io.Reader,
+) error {
+	// Stream directly to disk — never io.ReadAll the video into RAM.
+	storagePath, fileSize, err := h.processor.SaveOriginalFromReader(gallery.ID, photoID, r, ext)
+	if err != nil {
+		return fmt.Errorf("save video: %w", err)
+	}
+
+	absPath := h.processor.ServeOriginalPath(storagePath)
+
+	vmeta, err := media.ExtractVideoMeta(absPath)
+	if err != nil {
+		vmeta = &media.VideoMeta{}
+	}
+
+	// GenerateVideoThumbnail always returns a valid JPEG path (falls back to a
+	// dark placeholder when ffmpeg is unavailable). Only fails on disk errors.
+	thumbPath, err := h.processor.GenerateVideoThumbnail(gallery.ID, photoID, absPath, vmeta.Is360)
+	if err != nil {
+		// Can't write thumbnail at all — store video path so DB record is valid;
+		// the card will show a broken image rather than panic.
+		thumbPath = storagePath
+	}
+
+	p := &domain.Photo{
+		GalleryID:   gallery.ID,
+		UploadedBy:  uploaderID,
+		Filename:    filename,
+		StoragePath: storagePath,
+		ThumbPath:   thumbPath,
+		FileSize:    &fileSize,
+		MimeType:    mimeType,
+		Is360:       vmeta.Is360,
+		ExifData:    map[string]any{},
+		SortOrder:   sortOrder,
+	}
+	if vmeta.Is360 {
+		proj := "equirectangular"
+		p.ProjectionType = &proj
+	}
+	if vmeta.Width > 0 {
+		p.Width = &vmeta.Width
+		p.Height = &vmeta.Height
+	}
+	if vmeta.Duration > 0 {
+		p.Duration = &vmeta.Duration
+	}
 	_, err = h.photos.Create(ctx, p)
 	return err
 }
@@ -212,7 +296,6 @@ func (h *UploadHandler) DeletePhoto(c *echo.Context) error {
 		return echo.ErrNotFound
 	}
 
-	// Delete files from disk
 	h.processor.DeletePhoto(photo.StoragePath, photo.ThumbPath)
 
 	if err := h.photos.Delete(ctx, photoID); err != nil {
@@ -318,6 +401,16 @@ func extensionForMIME(mime string) string {
 		return ".webp"
 	case "image/heic", "image/heif":
 		return ".heic"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	case "video/ogg":
+		return ".ogv"
+	case "video/x-msvideo":
+		return ".avi"
 	}
-	return ".jpg"
+	return ""
 }
