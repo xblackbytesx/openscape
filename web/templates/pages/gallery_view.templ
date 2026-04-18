@@ -13,9 +13,11 @@ templ GalleryView(gallery *domain.Gallery, photos []*domain.Photo, csrfToken str
 				@components.UploadZone(gallery, csrfToken)
 			</div>
 		}
-		@components.PhotoFilter(photos)
 		if len(photos) > 1 {
-			<button id="viewer-sort-toggle" class="btn btn--ghost btn--sm viewer-sort-toggle">↑ Oldest first</button>
+			<div class="gallery-controls">
+				@components.PhotoFilter(photos)
+				<button id="viewer-sort-toggle" class="btn btn--ghost btn--sm viewer-sort-toggle">↑ Oldest first</button>
+			</div>
 		}
 		@components.PhotoGrid(photos, gallery.Slug, canEdit, csrfToken)
 		if len(photos) > 1 {
