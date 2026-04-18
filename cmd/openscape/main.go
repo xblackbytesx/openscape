@@ -162,7 +162,8 @@ func main() {
 	admin.POST("/galleries/:id/photos",          uploadHandler.Upload)
 	admin.DELETE("/galleries/:id/photos/:pid",   uploadHandler.DeletePhoto)
 	admin.PUT("/galleries/:id/photos/:pid",      uploadHandler.UpdatePhotoMeta)
-	admin.POST("/galleries/:id/photos/reorder",  uploadHandler.ReorderPhotos)
+	admin.POST("/galleries/:id/photos/reorder",       uploadHandler.ReorderPhotos)
+	admin.POST("/galleries/:id/photos/sort-by-date",  uploadHandler.SortByDate)
 	admin.POST("/galleries/:id/cover/:pid",      adminHandler.SetCoverPhoto)
 
 	admin.GET("/galleries/:id/members",        adminHandler.ManageGallery) // renders same page

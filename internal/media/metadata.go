@@ -238,6 +238,7 @@ func detectIs360FromMP4Bytes(data []byte) bool {
 
 func extractJPEGMeta(data []byte, meta *ImageMeta) {
 	xmpHeader := []byte("http://ns.adobe.com/xap/1.0/\x00")
+	exifHeader := []byte("Exif\x00\x00")
 
 	i := 0
 	for i < len(data)-4 {
@@ -263,6 +264,8 @@ func extractJPEGMeta(data []byte, meta *ImageMeta) {
 					meta.Is360 = true
 					meta.ProjectionType = "equirectangular"
 				}
+			} else if meta.CapturedAt == nil && len(segData) > len(exifHeader) && bytes.Equal(segData[:len(exifHeader)], exifHeader) {
+				meta.CapturedAt = extractExifDate(segData[len(exifHeader):])
 			}
 			i = segEnd
 		} else if marker == 0xD8 || marker == 0xD9 {
@@ -277,6 +280,140 @@ func extractJPEGMeta(data []byte, meta *ImageMeta) {
 			i += 2 + segLen
 		}
 	}
+}
+
+// extractExifDate parses DateTimeOriginal (tag 0x9003) from raw TIFF data
+// (the bytes after the "Exif\x00\x00" header in a JPEG APP1 segment).
+// Falls back to DateTimeDigitized (0x9004) then DateTime (0x0132).
+// Returns nil when the date cannot be read or parsed.
+func extractExifDate(tiff []byte) *time.Time {
+	if len(tiff) < 8 {
+		return nil
+	}
+
+	var order binary.ByteOrder
+	switch {
+	case tiff[0] == 'I' && tiff[1] == 'I':
+		order = binary.LittleEndian
+	case tiff[0] == 'M' && tiff[1] == 'M':
+		order = binary.BigEndian
+	default:
+		return nil
+	}
+
+	// TIFF magic check (0x002A)
+	if order.Uint16(tiff[2:4]) != 0x002A {
+		return nil
+	}
+
+	ifdOffset := int(order.Uint32(tiff[4:8]))
+
+	readUint16 := func(off int) (uint16, bool) {
+		if off+2 > len(tiff) {
+			return 0, false
+		}
+		return order.Uint16(tiff[off : off+2]), true
+	}
+	readUint32 := func(off int) (uint32, bool) {
+		if off+4 > len(tiff) {
+			return 0, false
+		}
+		return order.Uint32(tiff[off : off+4]), true
+	}
+
+	// readASCII reads a null-terminated ASCII value for a TIFF entry.
+	readASCII := func(count, valOff int) string {
+		if count <= 4 {
+			// value fits inline in the 4-byte value field
+			end := valOff + count
+			if end > len(tiff) {
+				end = len(tiff)
+			}
+			return strings.TrimRight(string(tiff[valOff:end]), "\x00")
+		}
+		offset, ok := readUint32(valOff)
+		if !ok || int(offset)+count > len(tiff) {
+			return ""
+		}
+		return strings.TrimRight(string(tiff[offset:int(offset)+count]), "\x00")
+	}
+
+	parseDate := func(s string) *time.Time {
+		t, err := time.Parse("2006:01:02 15:04:05", strings.TrimSpace(s))
+		if err != nil {
+			return nil
+		}
+		return &t
+	}
+
+	// walkIFD searches for target tags in a TIFF IFD and returns their string values.
+	walkIFD := func(offset int, targets map[uint16]bool) map[uint16]string {
+		result := map[uint16]string{}
+		count, ok := readUint16(offset)
+		if !ok {
+			return result
+		}
+		offset += 2
+		for i := 0; i < int(count); i++ {
+			entryOff := offset + i*12
+			if entryOff+12 > len(tiff) {
+				break
+			}
+			tag, _ := readUint16(entryOff)
+			typ, _ := readUint16(entryOff + 2)
+			cnt, _ := readUint32(entryOff + 4)
+			valOff := entryOff + 8
+
+			if targets[tag] && typ == 2 { // ASCII
+				result[tag] = readASCII(int(cnt), valOff)
+			}
+		}
+		return result
+	}
+
+	// Walk root IFD: find ExifIFD pointer (0x8769) and DateTime (0x0132).
+	rootCount, ok := readUint16(ifdOffset)
+	if !ok {
+		return nil
+	}
+	var exifIFDOffset uint32
+	var rootDateTime string
+
+	for i := 0; i < int(rootCount); i++ {
+		entryOff := ifdOffset + 2 + i*12
+		if entryOff+12 > len(tiff) {
+			break
+		}
+		tag, _ := readUint16(entryOff)
+		valOff := entryOff + 8
+		switch tag {
+		case 0x8769: // ExifIFD pointer
+			exifIFDOffset, _ = readUint32(valOff)
+		case 0x0132: // DateTime
+			typ, _ := readUint16(entryOff + 2)
+			cnt, _ := readUint32(entryOff + 4)
+			if typ == 2 {
+				rootDateTime = readASCII(int(cnt), valOff)
+			}
+		}
+	}
+
+	// Prefer DateTimeOriginal (0x9003) from ExifIFD.
+	if exifIFDOffset > 0 {
+		exifTags := walkIFD(int(exifIFDOffset), map[uint16]bool{0x9003: true, 0x9004: true})
+		if s := exifTags[0x9003]; s != "" {
+			return parseDate(s)
+		}
+		if s := exifTags[0x9004]; s != "" {
+			return parseDate(s)
+		}
+	}
+
+	// Last resort: root DateTime.
+	if rootDateTime != "" {
+		return parseDate(rootDateTime)
+	}
+	return nil
 }
 
 func detectIs360FromXMP(xmp string) bool {

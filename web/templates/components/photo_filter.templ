@@ -1,0 +1,42 @@
+package components
+
+import "github.com/openscape/openscape/internal/domain"
+
+// PhotoFilter renders content-type filter buttons above the photo grid.
+// Renders nothing when all photos share the same type (no filtering needed).
+templ PhotoFilter(photos []*domain.Photo) {
+	if photoFilterTypes(photos) > 1 {
+		<div class="photo-filter" id="photo-filter">
+			<button class="btn btn--primary btn--sm" data-filter="all">All</button>
+			if hasPhotoType(photos, "360-photo") {
+				<button class="btn btn--ghost btn--sm" data-filter="360-photo">360° Photos</button>
+			}
+			if hasPhotoType(photos, "360-video") {
+				<button class="btn btn--ghost btn--sm" data-filter="360-video">360° Videos</button>
+			}
+			if hasPhotoType(photos, "flat-photo") {
+				<button class="btn btn--ghost btn--sm" data-filter="flat-photo">Photos</button>
+			}
+			if hasPhotoType(photos, "flat-video") {
+				<button class="btn btn--ghost btn--sm" data-filter="flat-video">Videos</button>
+			}
+		</div>
+	}
+}
+
+func hasPhotoType(photos []*domain.Photo, t string) bool {
+	for _, p := range photos {
+		if photoType(p) == t {
+			return true
+		}
+	}
+	return false
+}
+
+func photoFilterTypes(photos []*domain.Photo) int {
+	seen := map[string]bool{}
+	for _, p := range photos {
+		seen[photoType(p)] = true
+	}
+	return len(seen)
+}
