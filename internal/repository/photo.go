@@ -131,3 +131,31 @@ func (s *PhotoStore) GetNextSortOrder(ctx context.Context, galleryID uuid.UUID) 
 	).Scan(&maxOrder)
 	return maxOrder, err
 }
+
+// SortByDate reorders all photos in the gallery chronologically by
+// COALESCE(captured_at, created_at) ASC, rewriting sort_order values.
+func (s *PhotoStore) SortByDate(ctx context.Context, galleryID uuid.UUID) error {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id FROM photos WHERE gallery_id = $1
+		 ORDER BY COALESCE(captured_at, created_at) ASC`, galleryID)
+	if err != nil {
+		return fmt.Errorf("sort by date query: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.Reorder(ctx, galleryID, ids)
+}

@@ -195,6 +195,7 @@ func (h *UploadHandler) processImageStream(
 		MimeType:    mimeType,
 		Is360:       meta.Is360,
 		ExifData:    meta.ExifData,
+		CapturedAt:  meta.CapturedAt,
 		SortOrder:   sortOrder,
 	}
 	if meta.Is360 && meta.ProjectionType != "" {
@@ -389,6 +390,33 @@ func (h *UploadHandler) ReorderPhotos(c *echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+func (h *UploadHandler) SortByDate(c *echo.Context) error {
+	ctx := c.Request().Context()
+	user := currentUser(c)
+
+	galleryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.ErrNotFound
+	}
+
+	gallery, err := h.galleries.GetByID(ctx, galleryID)
+	if err != nil || gallery == nil {
+		return echo.ErrNotFound
+	}
+	if gallery.OwnerID != user.ID {
+		member, _ := h.galleries.GetMember(ctx, galleryID, user.ID)
+		if member == nil || member.Role != domain.RoleEditor {
+			return echo.ErrForbidden
+		}
+	}
+
+	if err := h.photos.SortByDate(ctx, galleryID); err != nil {
+		return echo.ErrInternalServerError
+	}
+
+	return redirect(c, "/admin/galleries/"+galleryID.String())
 }
 
 func extensionForMIME(mime string) string {

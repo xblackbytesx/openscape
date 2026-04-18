@@ -5,6 +5,7 @@
 document.addEventListener('DOMContentLoaded', function () {
   initSortable();
   initUploadZone();
+  initPhotoFilter();
 });
 
 /* ── Drag-to-reorder photo grid ── */
@@ -33,6 +34,29 @@ function initSortable() {
         headers: { 'X-CSRF-Token': csrfToken }
       });
     }
+  });
+}
+
+/* ── Content-type filter tabs ── */
+function initPhotoFilter() {
+  const bar = document.getElementById('photo-filter');
+  if (!bar) return;
+
+  bar.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-filter]');
+    if (!btn) return;
+
+    bar.querySelectorAll('[data-filter]').forEach(function (b) {
+      b.classList.remove('btn--primary');
+      b.classList.add('btn--ghost');
+    });
+    btn.classList.remove('btn--ghost');
+    btn.classList.add('btn--primary');
+
+    const filter = btn.dataset.filter;
+    document.querySelectorAll('.photo-card').forEach(function (card) {
+      card.style.display = (filter === 'all' || card.dataset.type === filter) ? '' : 'none';
+    });
   });
 }
 

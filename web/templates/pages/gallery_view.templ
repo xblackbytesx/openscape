@@ -13,15 +13,18 @@ templ GalleryView(gallery *domain.Gallery, photos []*domain.Photo, csrfToken str
 				@components.UploadZone(gallery, csrfToken)
 			</div>
 		}
+		@components.PhotoFilter(photos)
 		@components.PhotoGrid(photos, gallery.Slug, canEdit, csrfToken)
-		if canEdit && len(photos) > 1 {
-			<div
-				id="sortable-meta"
-				data-gallery-id={ gallery.ID.String() }
-				data-csrf={ csrfToken }
-				style="display:none"
-			></div>
-			<script src="/static/vendor/sortable.min.js"></script>
+		if len(photos) > 1 {
+			if canEdit {
+				<div
+					id="sortable-meta"
+					data-gallery-id={ gallery.ID.String() }
+					data-csrf={ csrfToken }
+					style="display:none"
+				></div>
+				<script src="/static/vendor/sortable.min.js"></script>
+			}
 			<script src="/static/js/app.js" defer></script>
 		}
 	}
