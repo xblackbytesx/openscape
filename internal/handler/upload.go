@@ -42,25 +42,12 @@ func NewUploadHandler(
 
 func (h *UploadHandler) Upload(c *echo.Context) error {
 	ctx := c.Request().Context()
-	user := currentUser(c)
 
-	galleryID, err := uuid.Parse(c.Param("id"))
+	gallery, err := requireGalleryEditor(c, h.galleries)
 	if err != nil {
-		return echo.ErrNotFound
+		return err
 	}
-
-	gallery, err := h.galleries.GetByID(ctx, galleryID)
-	if err != nil || gallery == nil {
-		return echo.ErrNotFound
-	}
-
-	// Check upload permission: owner or editor member
-	if gallery.OwnerID != user.ID {
-		member, err := h.galleries.GetMember(ctx, galleryID, user.ID)
-		if err != nil || member == nil || member.Role != domain.RoleEditor {
-			return echo.ErrForbidden
-		}
-	}
+	user := currentUser(c)
 
 	// Limit total upload size
 	maxBytes := h.maxUploadMB * 1024 * 1024
@@ -95,10 +82,10 @@ func (h *UploadHandler) Upload(c *echo.Context) error {
 	}
 
 	if isHTMX(c) {
-		c.Response().Header().Set("HX-Redirect", "/admin/galleries/"+galleryID.String())
+		c.Response().Header().Set("HX-Redirect", "/admin/galleries/"+gallery.ID.String())
 		return c.NoContent(http.StatusOK)
 	}
-	return c.Redirect(http.StatusFound, "/admin/galleries/"+galleryID.String())
+	return c.Redirect(http.StatusFound, "/admin/galleries/"+gallery.ID.String())
 }
 
 // processFileHeader handles one multipart file. Videos are streamed straight to
@@ -272,22 +259,10 @@ func (h *UploadHandler) processVideoStream(
 
 func (h *UploadHandler) DeletePhoto(c *echo.Context) error {
 	ctx := c.Request().Context()
-	user := currentUser(c)
 
-	galleryID, err := uuid.Parse(c.Param("id"))
+	gallery, err := requireGalleryEditor(c, h.galleries)
 	if err != nil {
-		return echo.ErrNotFound
-	}
-
-	gallery, err := h.galleries.GetByID(ctx, galleryID)
-	if err != nil || gallery == nil {
-		return echo.ErrNotFound
-	}
-	if gallery.OwnerID != user.ID {
-		member, _ := h.galleries.GetMember(ctx, galleryID, user.ID)
-		if member == nil || member.Role != domain.RoleEditor {
-			return echo.ErrForbidden
-		}
+		return err
 	}
 
 	photoID, err := uuid.Parse(c.Param("pid"))
@@ -296,7 +271,7 @@ func (h *UploadHandler) DeletePhoto(c *echo.Context) error {
 	}
 
 	photo, err := h.photos.GetByID(ctx, photoID)
-	if err != nil || photo == nil || photo.GalleryID != galleryID {
+	if err != nil || photo == nil || photo.GalleryID != gallery.ID {
 		return echo.ErrNotFound
 	}
 
@@ -309,27 +284,15 @@ func (h *UploadHandler) DeletePhoto(c *echo.Context) error {
 	if isHTMX(c) {
 		return c.NoContent(http.StatusOK)
 	}
-	return c.Redirect(http.StatusFound, "/admin/galleries/"+galleryID.String())
+	return c.Redirect(http.StatusFound, "/admin/galleries/"+gallery.ID.String())
 }
 
 func (h *UploadHandler) UpdatePhotoMeta(c *echo.Context) error {
 	ctx := c.Request().Context()
-	user := currentUser(c)
 
-	galleryID, err := uuid.Parse(c.Param("id"))
+	gallery, err := requireGalleryEditor(c, h.galleries)
 	if err != nil {
-		return echo.ErrNotFound
-	}
-
-	gallery, err := h.galleries.GetByID(ctx, galleryID)
-	if err != nil || gallery == nil {
-		return echo.ErrNotFound
-	}
-	if gallery.OwnerID != user.ID {
-		member, _ := h.galleries.GetMember(ctx, galleryID, user.ID)
-		if member == nil || member.Role != domain.RoleEditor {
-			return echo.ErrForbidden
-		}
+		return err
 	}
 
 	photoID, err := uuid.Parse(c.Param("pid"))
@@ -338,7 +301,7 @@ func (h *UploadHandler) UpdatePhotoMeta(c *echo.Context) error {
 	}
 
 	photo, err := h.photos.GetByID(ctx, photoID)
-	if err != nil || photo == nil || photo.GalleryID != galleryID {
+	if err != nil || photo == nil || photo.GalleryID != gallery.ID {
 		return echo.ErrNotFound
 	}
 
@@ -352,27 +315,15 @@ func (h *UploadHandler) UpdatePhotoMeta(c *echo.Context) error {
 	if isHTMX(c) {
 		return c.NoContent(http.StatusOK)
 	}
-	return c.Redirect(http.StatusFound, "/admin/galleries/"+galleryID.String())
+	return c.Redirect(http.StatusFound, "/admin/galleries/"+gallery.ID.String())
 }
 
 func (h *UploadHandler) ReorderPhotos(c *echo.Context) error {
 	ctx := c.Request().Context()
-	user := currentUser(c)
 
-	galleryID, err := uuid.Parse(c.Param("id"))
+	gallery, err := requireGalleryEditor(c, h.galleries)
 	if err != nil {
-		return echo.ErrNotFound
-	}
-
-	gallery, err := h.galleries.GetByID(ctx, galleryID)
-	if err != nil || gallery == nil {
-		return echo.ErrNotFound
-	}
-	if gallery.OwnerID != user.ID {
-		member, _ := h.galleries.GetMember(ctx, galleryID, user.ID)
-		if member == nil || member.Role != domain.RoleEditor {
-			return echo.ErrForbidden
-		}
+		return err
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
@@ -389,7 +340,9 @@ func (h *UploadHandler) ReorderPhotos(c *echo.Context) error {
 	}
 
 	if len(orderedIDs) > 0 {
-		_ = h.photos.Reorder(ctx, galleryID, orderedIDs)
+		if err := h.photos.Reorder(ctx, gallery.ID, orderedIDs); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "reorder failed"})
+		}
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -397,26 +350,14 @@ func (h *UploadHandler) ReorderPhotos(c *echo.Context) error {
 
 func (h *UploadHandler) SortByDate(c *echo.Context) error {
 	ctx := c.Request().Context()
-	user := currentUser(c)
 
-	galleryID, err := uuid.Parse(c.Param("id"))
+	gallery, err := requireGalleryEditor(c, h.galleries)
 	if err != nil {
-		return echo.ErrNotFound
-	}
-
-	gallery, err := h.galleries.GetByID(ctx, galleryID)
-	if err != nil || gallery == nil {
-		return echo.ErrNotFound
-	}
-	if gallery.OwnerID != user.ID {
-		member, _ := h.galleries.GetMember(ctx, galleryID, user.ID)
-		if member == nil || member.Role != domain.RoleEditor {
-			return echo.ErrForbidden
-		}
+		return err
 	}
 
 	// Backfill captured_at for photos uploaded before EXIF extraction existed.
-	if photos, err := h.photos.ListByGallery(ctx, galleryID); err == nil {
+	if photos, err := h.photos.ListByGallery(ctx, gallery.ID); err == nil {
 		for _, p := range photos {
 			if p.CapturedAt != nil {
 				continue
@@ -440,11 +381,11 @@ func (h *UploadHandler) SortByDate(c *echo.Context) error {
 	}
 
 	desc := c.FormValue("direction") != "asc" // default is desc (newest first)
-	if err := h.photos.SortByDate(ctx, galleryID, desc); err != nil {
+	if err := h.photos.SortByDate(ctx, gallery.ID, desc); err != nil {
 		return echo.ErrInternalServerError
 	}
 
-	return redirect(c, "/admin/galleries/"+galleryID.String())
+	return redirect(c, "/admin/galleries/"+gallery.ID.String())
 }
 
 func extensionForMIME(mime string) string {

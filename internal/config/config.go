@@ -30,8 +30,8 @@ func Load() (*Config, error) {
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
-	if len(cfg.SessionSecret) < 32 {
-		return nil, fmt.Errorf("SESSION_SECRET must be at least 32 characters")
+	if len(cfg.SessionSecret) < 64 {
+		return nil, fmt.Errorf("SESSION_SECRET must be at least 64 characters")
 	}
 
 	return cfg, nil

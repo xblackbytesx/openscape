@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/internal/repository"
 )
 
 var emailRe = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -49,4 +51,27 @@ func redirect(c *echo.Context, path string) error {
 		return c.NoContent(http.StatusOK)
 	}
 	return c.Redirect(http.StatusFound, path)
+}
+
+// requireGalleryEditor loads the gallery from :id param and verifies the current
+// user is the owner or an editor member. Returns ErrNotFound or ErrForbidden on failure.
+func requireGalleryEditor(c *echo.Context, galleries *repository.GalleryStore) (*domain.Gallery, error) {
+	ctx := c.Request().Context()
+	user := currentUser(c)
+
+	galleryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return nil, echo.ErrNotFound
+	}
+	gallery, err := galleries.GetByID(ctx, galleryID)
+	if err != nil || gallery == nil {
+		return nil, echo.ErrNotFound
+	}
+	if gallery.OwnerID != user.ID {
+		member, err := galleries.GetMember(ctx, galleryID, user.ID)
+		if err != nil || member == nil || member.Role != domain.RoleEditor {
+			return nil, echo.ErrForbidden
+		}
+	}
+	return gallery, nil
 }

@@ -17,6 +17,10 @@ const (
 	VisibilityPrivate           GalleryVisibility = "private"
 )
 
+// GalSessionCookiePrefix is the prefix for gallery session cookies.
+// Cookie name = prefix + gallery slug.
+const GalSessionCookiePrefix = "openscape_gs_"
+
 type MemberRole string
 
 const (

@@ -3,7 +3,6 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -122,7 +121,7 @@ func (h *GalleryHandler) UnlockPost(c *echo.Context) error {
 		return pages.GalleryUnlock(gallery, csrfToken(c), "Server error. Please try again.").Render(ctx, c.Response())
 	}
 
-	cookieName := fmt.Sprintf("openscape_gs_%s", slug)
+	cookieName := domain.GalSessionCookiePrefix + slug
 	http.SetCookie(c.Response(), &http.Cookie{
 		Name:     cookieName,
 		Value:    token,

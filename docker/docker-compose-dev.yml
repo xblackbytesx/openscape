@@ -12,7 +12,7 @@ services:
         required: false
     environment:
       DATABASE_URL: postgres://openscape:openscape@openscape-db:5432/openscape?sslmode=disable
-      SESSION_SECRET: dev-session-secret-32-chars-min!!
+      SESSION_SECRET: dev-session-secret-at-least-64-characters-long-for-local-development-only!!
       PORT: "8080"
       SECURE_COOKIES: "false"
       ALLOW_REGISTRATION: "true"
