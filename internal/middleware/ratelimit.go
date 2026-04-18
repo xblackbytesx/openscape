@@ -19,6 +19,7 @@ type RateLimiter struct {
 	limiters map[string]*ipLimiter
 	r        rate.Limit
 	b        int
+	ticker   *time.Ticker
 }
 
 func NewRateLimiter(requestsPerMinute float64, burst int) *RateLimiter {
@@ -26,15 +27,18 @@ func NewRateLimiter(requestsPerMinute float64, burst int) *RateLimiter {
 		limiters: make(map[string]*ipLimiter),
 		r:        rate.Limit(requestsPerMinute / 60.0),
 		b:        burst,
+		ticker:   time.NewTicker(5 * time.Minute),
 	}
-	// Evict stale entries every 5 minutes
 	go func() {
-		for range time.Tick(5 * time.Minute) {
+		for range rl.ticker.C {
 			rl.evict()
 		}
 	}()
 	return rl
 }
+
+// Stop releases the background eviction goroutine.
+func (rl *RateLimiter) Stop() { rl.ticker.Stop() }
 
 func (rl *RateLimiter) evict() {
 	rl.mu.Lock()

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -51,8 +53,9 @@ func main() {
 	processor := media.NewProcessor(cfg.UploadsPath)
 
 	// ── Background maintenance ────────────────────────────────────────────────
+	cleanupTicker := time.NewTicker(6 * time.Hour)
 	go func() {
-		for range time.Tick(6 * time.Hour) {
+		for range cleanupTicker.C {
 			_ = gallerySessionStore.DeleteExpired(context.Background())
 		}
 	}()
@@ -184,8 +187,25 @@ func main() {
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	slog.Info("starting openscape", "addr", addr)
 
-	if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
-		slog.Error("server error", "error", err)
-		os.Exit(1)
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-sigCtx.Done()
+	slog.Info("shutting down...")
+	cleanupTicker.Stop()
+	authLimiter.Stop()
+	unlockLimiter.Stop()
+
+	shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutCtx); err != nil {
+		slog.Error("shutdown error", "error", err)
 	}
 }

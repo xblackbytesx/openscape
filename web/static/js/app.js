@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initUploadForm();
   initUploadZone();
   initPhotoFilter();
+  initSortToggle();
 });
 
 /* ── Drag-to-reorder photo grid ── */
@@ -189,5 +190,39 @@ function initUploadZone() {
       input.files = dt.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
     }
+  });
+}
+
+/* ── Viewer sort order toggle (client-side, persisted in localStorage) ── */
+function initSortToggle() {
+  var btn = document.getElementById('viewer-sort-toggle');
+  if (!btn) return;
+
+  var grid = document.querySelector('.photo-grid');
+  if (!grid) return;
+
+  var STORAGE_KEY = 'openscape-sort-reversed';
+
+  function reverseGrid() {
+    var cards = Array.from(grid.children);
+    cards.reverse().forEach(function (c) { grid.appendChild(c); });
+  }
+
+  function updateLabel(reversed) {
+    btn.textContent = reversed ? '↓ Newest first' : '↑ Oldest first';
+  }
+
+  var saved = localStorage.getItem(STORAGE_KEY) === '1';
+  if (saved) {
+    reverseGrid();
+    updateLabel(true);
+  }
+
+  btn.addEventListener('click', function () {
+    var isReversed = localStorage.getItem(STORAGE_KEY) === '1';
+    var next = !isReversed;
+    localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
+    reverseGrid();
+    updateLabel(next);
   });
 }

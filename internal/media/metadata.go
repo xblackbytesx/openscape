@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -31,37 +29,15 @@ type VideoMeta struct {
 	CapturedAt *time.Time
 }
 
-// DetectMIME reads the first 512 bytes to detect MIME type.
-// Returns the MIME type and a new reader that starts from the beginning.
-func DetectMIME(r io.Reader) (string, io.Reader, error) {
-	buf := make([]byte, 512)
-	n, err := io.ReadFull(r, buf)
-	if err != nil && err != io.ErrUnexpectedEOF {
-		return "", nil, err
-	}
-	mime := http.DetectContentType(buf[:n])
-	combined := io.MultiReader(bytes.NewReader(buf[:n]), r)
-	return mime, combined, nil
+var allowedMIMEs = map[string]bool{
+	"image/jpeg": true, "image/png": true, "image/webp": true,
+	"image/heic": true, "image/heif": true,
+	"video/mp4": true, "video/quicktime": true, "video/webm": true,
+	"video/ogg": true, "video/x-msvideo": true,
 }
 
 // IsAllowedMIME checks if the MIME type is allowed for upload.
-func IsAllowedMIME(mime string) bool {
-	allowed := map[string]bool{
-		// Images
-		"image/jpeg": true,
-		"image/png":  true,
-		"image/webp": true,
-		"image/heic": true,
-		"image/heif": true,
-		// Videos
-		"video/mp4":       true,
-		"video/quicktime": true,
-		"video/webm":      true,
-		"video/ogg":       true,
-		"video/x-msvideo": true,
-	}
-	return allowed[mime]
-}
+func IsAllowedMIME(mime string) bool { return allowedMIMEs[mime] }
 
 // MIMEFromExtension maps common file extensions to MIME types for cases where
 // content sniffing returns "application/octet-stream" (e.g. some MOV/MP4 variants).

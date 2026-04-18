@@ -1048,6 +1048,20 @@ body {
 .manage-section__title-row .manage-section__title {
     margin-bottom: 0;
 }
+.sort-actions {
+    display: flex;
+    gap: var(--sp-2);
+    align-items: center;
+}
+.viewer-sort-toggle {
+    display: block;
+    margin: 0 var(--sp-6) var(--sp-3);
+}
+@media (max-width: 640px) {
+    .viewer-sort-toggle {
+        margin: 0 var(--sp-3) var(--sp-3);
+    }
+}
 .photo-filter {
     display: flex;
     gap: var(--sp-2);

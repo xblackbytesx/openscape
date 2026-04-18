@@ -97,7 +97,7 @@ func checkGalleryAccessByGallery(
 		return nil
 
 	case domain.VisibilityUnlistedProtected:
-		cookieName := "openscape_gs_" + gallery.Slug
+		cookieName := domain.GalSessionCookiePrefix + gallery.Slug
 		cookie, err := c.Cookie(cookieName)
 		if err != nil || cookie.Value == "" {
 			return echo.ErrForbidden

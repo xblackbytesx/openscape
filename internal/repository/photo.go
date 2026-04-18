@@ -141,12 +141,16 @@ func (s *PhotoStore) GetNextSortOrder(ctx context.Context, galleryID uuid.UUID) 
 	return maxOrder, err
 }
 
-// SortByDate reorders all photos in the gallery chronologically by
-// COALESCE(captured_at, created_at) ASC, rewriting sort_order values.
-func (s *PhotoStore) SortByDate(ctx context.Context, galleryID uuid.UUID) error {
+// SortByDate reorders all photos in the gallery chronologically, rewriting sort_order values.
+// desc=true puts the most recent photo first (sort_order 0).
+func (s *PhotoStore) SortByDate(ctx context.Context, galleryID uuid.UUID, desc bool) error {
+	dir := "ASC"
+	if desc {
+		dir = "DESC"
+	}
 	rows, err := s.pool.Query(ctx,
 		`SELECT id FROM photos WHERE gallery_id = $1
-		 ORDER BY COALESCE(captured_at, created_at) ASC`, galleryID)
+		 ORDER BY COALESCE(captured_at, created_at) `+dir, galleryID)
 	if err != nil {
 		return fmt.Errorf("sort by date query: %w", err)
 	}

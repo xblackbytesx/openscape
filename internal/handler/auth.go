@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/labstack/echo/v5"
 	"github.com/openscape/openscape/internal/auth"
@@ -121,17 +122,21 @@ func (h *AuthHandler) Logout(c *echo.Context) error {
 
 // CheckSetup redirects to /setup if no users exist.
 // Skips static assets and the setup route itself.
+// Caches the "setup complete" state so the DB is queried at most once after startup.
 func CheckSetup(users *repository.UserStore) echo.MiddlewareFunc {
+	var setupDone atomic.Bool
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			path := c.Request().URL.Path
-			// Skip for setup and static assets
 			if path == "/setup" || strings.HasPrefix(path, "/static/") {
 				return next(c)
 			}
-			count, err := users.CountAll(c.Request().Context())
-			if err == nil && count == 0 {
-				return c.Redirect(http.StatusFound, "/setup")
+			if !setupDone.Load() {
+				count, err := users.CountAll(c.Request().Context())
+				if err == nil && count == 0 {
+					return c.Redirect(http.StatusFound, "/setup")
+				}
+				setupDone.Store(true)
 			}
 			return next(c)
 		}

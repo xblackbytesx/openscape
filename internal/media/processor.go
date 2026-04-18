@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,8 +175,12 @@ func (p *Processor) generatePlaceholderThumbnail(fullPath, relPath string, is360
 
 // DeletePhoto removes original and thumbnail files for a photo from disk.
 func (p *Processor) DeletePhoto(storagePath, thumbPath string) {
-	_ = os.Remove(filepath.Join(p.uploadsPath, storagePath))
-	_ = os.Remove(filepath.Join(p.uploadsPath, thumbPath))
+	if err := os.Remove(filepath.Join(p.uploadsPath, storagePath)); err != nil && !os.IsNotExist(err) {
+		slog.Warn("delete original failed", "path", storagePath, "error", err)
+	}
+	if err := os.Remove(filepath.Join(p.uploadsPath, thumbPath)); err != nil && !os.IsNotExist(err) {
+		slog.Warn("delete thumb failed", "path", thumbPath, "error", err)
+	}
 }
 
 // ServeOriginalPath returns the filesystem path for an original file.

@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -10,8 +9,7 @@ import (
 )
 
 const (
-	CtxGallery     = "gallery"
-	galSessionPrefix = "openscape_gs_"
+	CtxGallery = "gallery"
 )
 
 // CheckGalleryAccess loads the gallery and checks visibility rules.
@@ -48,7 +46,7 @@ func CheckGalleryAccess(galleries *repository.GalleryStore, galSessions *reposit
 				c.Set(CtxGallery, gallery)
 
 			case domain.VisibilityUnlistedProtected:
-				cookieName := fmt.Sprintf("%s%s", galSessionPrefix, slug)
+				cookieName := domain.GalSessionCookiePrefix + slug
 				cookie, err := c.Cookie(cookieName)
 				if err != nil || cookie.Value == "" {
 					return c.Redirect(http.StatusFound, "/g/"+slug+"/unlock")
