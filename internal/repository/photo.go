@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -94,6 +95,14 @@ func (s *PhotoStore) ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]
 
 func (s *PhotoStore) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM photos WHERE id = $1`, id)
+	return err
+}
+
+func (s *PhotoStore) UpdateCapturedAt(ctx context.Context, photoID uuid.UUID, t time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE photos SET captured_at = $1 WHERE id = $2`,
+		t, photoID,
+	)
 	return err
 }
 

@@ -7,8 +7,10 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -250,6 +252,7 @@ func (h *UploadHandler) processVideoStream(
 		MimeType:    mimeType,
 		Is360:       vmeta.Is360,
 		ExifData:    map[string]any{},
+		CapturedAt:  vmeta.CapturedAt,
 		SortOrder:   sortOrder,
 	}
 	if vmeta.Is360 {
@@ -409,6 +412,30 @@ func (h *UploadHandler) SortByDate(c *echo.Context) error {
 		member, _ := h.galleries.GetMember(ctx, galleryID, user.ID)
 		if member == nil || member.Role != domain.RoleEditor {
 			return echo.ErrForbidden
+		}
+	}
+
+	// Backfill captured_at for photos uploaded before EXIF extraction existed.
+	if photos, err := h.photos.ListByGallery(ctx, galleryID); err == nil {
+		for _, p := range photos {
+			if p.CapturedAt != nil {
+				continue
+			}
+			absPath := h.processor.ServeOriginalPath(p.StoragePath)
+			var t *time.Time
+			if strings.HasPrefix(p.MimeType, "video/") {
+				if vmeta, err := media.ExtractVideoMeta(absPath); err == nil && vmeta.CapturedAt != nil {
+					t = vmeta.CapturedAt
+				}
+			} else {
+				if data, err := os.ReadFile(absPath); err == nil {
+					imgMeta := media.ExtractMetadata(data, p.MimeType)
+					t = imgMeta.CapturedAt
+				}
+			}
+			if t != nil {
+				_ = h.photos.UpdateCapturedAt(ctx, p.ID, *t)
+			}
 		}
 	}
 

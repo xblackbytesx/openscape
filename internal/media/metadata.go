@@ -24,10 +24,11 @@ type ImageMeta struct {
 }
 
 type VideoMeta struct {
-	Width    int
-	Height   int
-	Duration int // seconds
-	Is360    bool
+	Width      int
+	Height     int
+	Duration   int // seconds
+	Is360      bool
+	CapturedAt *time.Time
 }
 
 // DetectMIME reads the first 512 bytes to detect MIME type.
@@ -171,6 +172,13 @@ func ExtractVideoMeta(filePath string) (*VideoMeta, error) {
 		var dur float64
 		fmt.Sscanf(probe.Format.Duration, "%f", &dur)
 		meta.Duration = int(dur + 0.5)
+	}
+
+	// Parse creation_time from format tags (Android, GoPro, Insta360 MP4 exports).
+	if ct := probe.Format.Tags["creation_time"]; ct != "" {
+		if t, err := time.Parse(time.RFC3339, ct); err == nil && t.Year() >= 2000 {
+			meta.CapturedAt = &t
+		}
 	}
 
 	// XMP UUID atom fallback — catches Insta360 and cameras that don't follow
