@@ -5,10 +5,9 @@ import "github.com/openscape/openscape/internal/domain"
 templ UploadZone(gallery *domain.Gallery, csrfToken string) {
 	<div class="upload-zone" id="upload-zone">
 		<form
-			hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
-			hx-encoding="multipart/form-data"
-			hx-indicator="#upload-progress"
-			hx-on::after-request="if(event.detail.successful){window.location.reload()}else{var m='Upload failed.';try{m=JSON.parse(event.detail.xhr.responseText).error||m;}catch(e){}alert(m);}"
+			id="upload-form"
+			action={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
+			method="post"
 			enctype="multipart/form-data"
 		>
 			<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -31,9 +30,6 @@ templ UploadZone(gallery *domain.Gallery, csrfToken string) {
 				onchange="this.form.requestSubmit()"
 			/>
 		</form>
-		<div id="upload-progress" class="upload-progress htmx-indicator">
-			<div class="upload-progress__spinner"></div>
-			<span class="upload-progress__text">Uploading… this may take a while for large videos</span>
-		</div>
+		<div id="upload-file-list" class="upload-file-list"></div>
 	</div>
 }
