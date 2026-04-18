@@ -84,14 +84,26 @@ templ AdminGalleryManage(user *domain.User, gallery *domain.Gallery, photos []*d
 				<div class="manage-section__title-row">
 					<h2 class="manage-section__title">Photos ({ photoCount(photos) })</h2>
 					if len(photos) > 1 {
-						<form
-							hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos/sort-by-date" }
-							hx-swap="none"
-							hx-on::after-request="if(event.detail.successful) window.location.reload()"
-						>
-							<input type="hidden" name="_csrf" value={ csrfToken }/>
-							<button class="btn btn--ghost btn--sm" type="submit">Sort by date taken</button>
-						</form>
+						<div class="sort-actions">
+							<form
+								hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos/sort-by-date" }
+								hx-swap="none"
+								hx-on::after-request="if(event.detail.successful) window.location.reload()"
+							>
+								<input type="hidden" name="_csrf" value={ csrfToken }/>
+								<input type="hidden" name="direction" value="desc"/>
+								<button class="btn btn--primary btn--sm" type="submit">↓ Newest first</button>
+							</form>
+							<form
+								hx-post={ "/admin/galleries/" + gallery.ID.String() + "/photos/sort-by-date" }
+								hx-swap="none"
+								hx-on::after-request="if(event.detail.successful) window.location.reload()"
+							>
+								<input type="hidden" name="_csrf" value={ csrfToken }/>
+								<input type="hidden" name="direction" value="asc"/>
+								<button class="btn btn--ghost btn--sm" type="submit">↑ Oldest first</button>
+							</form>
+						</div>
 					}
 				</div>
 				@components.UploadZone(gallery, csrfToken)

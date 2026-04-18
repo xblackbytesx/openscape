@@ -439,7 +439,8 @@ func (h *UploadHandler) SortByDate(c *echo.Context) error {
 		}
 	}
 
-	if err := h.photos.SortByDate(ctx, galleryID); err != nil {
+	desc := c.FormValue("direction") != "asc" // default is desc (newest first)
+	if err := h.photos.SortByDate(ctx, galleryID, desc); err != nil {
 		return echo.ErrInternalServerError
 	}
 
