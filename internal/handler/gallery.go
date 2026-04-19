@@ -70,7 +70,24 @@ func (h *GalleryHandler) PhotoView(c *echo.Context) error {
 		edit = true
 	}
 
-	return pages.PhotoView(gallery, photo, csrfToken(c), edit, user).Render(ctx, c.Response())
+	var prevID, nextID *uuid.UUID
+	if allPhotos, err := h.photos.ListByGallery(ctx, gallery.ID); err == nil {
+		for i, p := range allPhotos {
+			if p.ID == photoID {
+				if i > 0 {
+					id := allPhotos[i-1].ID
+					prevID = &id
+				}
+				if i < len(allPhotos)-1 {
+					id := allPhotos[i+1].ID
+					nextID = &id
+				}
+				break
+			}
+		}
+	}
+
+	return pages.PhotoView(gallery, photo, prevID, nextID, csrfToken(c), edit, user).Render(ctx, c.Response())
 }
 
 func (h *GalleryHandler) UnlockGet(c *echo.Context) error {

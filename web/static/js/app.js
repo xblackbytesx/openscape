@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initUploadZone();
   initPhotoFilter();
   initSortToggle();
+  initPhotoNav();
 });
 
 /* ── Drag-to-reorder photo grid ── */
@@ -225,4 +226,31 @@ function initSortToggle() {
     reverseGrid();
     updateLabel(next);
   });
+}
+
+/* ── Photo prev/next navigation (arrow keys + swipe) ── */
+function initPhotoNav() {
+  var prev = document.querySelector('[data-nav="prev"]');
+  var next = document.querySelector('[data-nav="next"]');
+  if (!prev && !next) return;
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft'  && prev) window.location.href = prev.href;
+    if (e.key === 'ArrowRight' && next) window.location.href = next.href;
+  });
+
+  var touchStartX = 0, touchStartY = 0;
+  document.addEventListener('touchstart', function (e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    var dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx > 0 && prev) window.location.href = prev.href;
+      if (dx < 0 && next) window.location.href = next.href;
+    }
+  }, { passive: true });
 }

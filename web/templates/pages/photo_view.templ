@@ -1,12 +1,13 @@
 package pages
 
 import (
+	"github.com/google/uuid"
 	"github.com/openscape/openscape/internal/domain"
 	"github.com/openscape/openscape/web/templates/components"
 	"github.com/openscape/openscape/web/templates/layouts"
 )
 
-templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, csrfToken string, canEdit bool, user *domain.User) {
+templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, prevID, nextID *uuid.UUID, csrfToken string, canEdit bool, user *domain.User) {
 	@layouts.GalleryLayout(photo.DisplayTitle(), csrfToken, gallery, user, canEdit) {
 		if photo.Is360 && photo.IsVideo() {
 			<!-- Immersive 360° video layout -->
@@ -32,6 +33,7 @@ templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, csrfToken string, 
 				if canEdit {
 					@editOverlay(gallery, photo, csrfToken)
 				}
+				@photoNavArrows(gallery, prevID, nextID)
 			</div>
 		} else if photo.Is360 {
 			<!-- Immersive 360° photo layout: viewer fills viewport, info overlaid -->
@@ -54,6 +56,7 @@ templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, csrfToken string, 
 				if canEdit {
 					@editOverlay(gallery, photo, csrfToken)
 				}
+				@photoNavArrows(gallery, prevID, nextID)
 			</div>
 		} else if photo.IsVideo() {
 			<!-- Flat video layout -->
@@ -84,6 +87,7 @@ templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, csrfToken string, 
 						@editPanel(gallery, photo, csrfToken)
 					}
 				</div>
+				@photoNavArrows(gallery, prevID, nextID)
 			</div>
 		} else {
 			<!-- Standard flat photo layout: viewer + info below -->
@@ -111,8 +115,35 @@ templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, csrfToken string, 
 						@editPanel(gallery, photo, csrfToken)
 					}
 				</div>
+				@photoNavArrows(gallery, prevID, nextID)
 			</div>
 		}
+		<script src="/static/js/app.js" defer></script>
+	}
+}
+
+templ photoNavArrows(gallery *domain.Gallery, prevID, nextID *uuid.UUID) {
+	if prevID != nil || nextID != nil {
+		<nav class="photo-nav" aria-label="Photo navigation">
+			if prevID != nil {
+				<a
+					href={ templ.SafeURL("/g/" + gallery.Slug + "/photo/" + prevID.String()) }
+					class="photo-nav__btn photo-nav__btn--prev"
+					data-nav="prev"
+					aria-label="Previous photo"
+				>‹</a>
+			} else {
+				<span></span>
+			}
+			if nextID != nil {
+				<a
+					href={ templ.SafeURL("/g/" + gallery.Slug + "/photo/" + nextID.String()) }
+					class="photo-nav__btn photo-nav__btn--next"
+					data-nav="next"
+					aria-label="Next photo"
+				>›</a>
+			}
+		</nav>
 	}
 }
 

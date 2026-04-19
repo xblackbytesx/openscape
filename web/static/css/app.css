@@ -676,6 +676,42 @@ body {
     max-height: calc(100dvh - 2 * var(--sp-4));
 }
 
+/* ── Photo prev/next navigation overlay ── */
+.photo-nav {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 50;
+    padding: 0 var(--sp-4);
+}
+.photo-nav__btn {
+    pointer-events: all;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 1.75rem;
+    line-height: 1;
+    text-decoration: none;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0.75;
+    transition: opacity 0.15s, background 0.15s;
+    user-select: none;
+}
+.photo-nav__btn:hover { opacity: 1; background: rgba(0, 0, 0, 0.65); }
+@media (max-width: 640px) {
+    .photo-nav { padding: 0 var(--sp-2); }
+    .photo-nav__btn { width: 2.25rem; height: 2.25rem; font-size: 1.5rem; opacity: 0.5; }
+}
+
 /* ── Flat photo view (stacked layout) ── */
 .photo-view {
     display: flex;
