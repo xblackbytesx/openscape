@@ -9,6 +9,9 @@ import (
 
 templ PhotoView(gallery *domain.Gallery, photo *domain.Photo, prevID, nextID *uuid.UUID, csrfToken string, canEdit bool, user *domain.User) {
 	@layouts.GalleryLayout(photo.DisplayTitle(), csrfToken, gallery, user, canEdit) {
+		if nextID != nil {
+			<link rel="prefetch" href={ templ.SafeURL("/g/" + gallery.Slug + "/photo/" + nextID.String()) }/>
+		}
 		if photo.Is360 && photo.IsVideo() {
 			<!-- Immersive 360° video layout -->
 			<div class="photo-view photo-view--360">
