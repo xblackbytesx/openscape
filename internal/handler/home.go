@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -28,6 +29,7 @@ func (h *HomeHandler) Home(c *echo.Context) error {
 
 	galleries, err := h.galleries.ListPublic(ctx)
 	if err != nil {
+		slog.Warn("home: list public galleries failed", "error", err)
 		galleries = []*domain.Gallery{}
 	}
 

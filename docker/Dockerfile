@@ -10,6 +10,7 @@ RUN npm install --prefix /tmp/web && \
     mkdir -p web/static/vendor/psv && \
     cp /tmp/web/node_modules/htmx.org/dist/htmx.min.js              web/static/vendor/htmx.min.js && \
     cp /tmp/web/node_modules/sortablejs/Sortable.min.js              web/static/vendor/sortable.min.js && \
+    cp /tmp/web/node_modules/tus-js-client/dist/tus.min.js          web/static/vendor/tus.min.js && \
     cp /tmp/web/node_modules/three/build/three.module.min.js         web/static/vendor/psv/three.module.js && \
     cp /tmp/web/node_modules/@photo-sphere-viewer/core/index.module.js \
                                                                       web/static/vendor/psv/core.esm.js && \

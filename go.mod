@@ -10,6 +10,7 @@ require (
 	github.com/gorilla/sessions v1.4.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/labstack/echo/v5 v5.1.0
+	github.com/tus/tusd/v2 v2.7.1
 	golang.org/x/crypto v0.49.0
 	golang.org/x/image v0.38.0
 	golang.org/x/time v0.15.0
@@ -29,6 +30,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
+	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect

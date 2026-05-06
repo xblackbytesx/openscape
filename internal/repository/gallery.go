@@ -82,25 +82,39 @@ func (s *GalleryStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Galle
 	return g, nil
 }
 
+// galleryListColumns is the SELECT clause shared by the gallery list queries.
+// Cover thumbnail comes from the explicit cover_photo_id when set, otherwise
+// a LATERAL JOIN picks the first photo by sort order — one extra row per
+// gallery instead of a per-row correlated subquery.
+const galleryListColumns = `g.id, g.owner_id, g.title, g.description, g.slug, g.visibility,
+	        g.password_hash, g.cover_photo_id, g.created_at, g.updated_at,
+	        COALESCE(pc.photo_count, 0) AS photo_count,
+	        COALESCE(cp.thumb_path, fp.thumb_path, '') AS cover_thumb`
+
+const galleryListJoins = `
+	 LEFT JOIN (
+	     SELECT gallery_id, COUNT(*) AS photo_count
+	     FROM photos
+	     WHERE status <> 'failed'
+	     GROUP BY gallery_id
+	 ) pc ON pc.gallery_id = g.id
+	 LEFT JOIN photos cp ON cp.id = g.cover_photo_id
+	 LEFT JOIN LATERAL (
+	     SELECT thumb_path FROM photos
+	     WHERE gallery_id = g.id
+	     ORDER BY sort_order ASC, created_at ASC
+	     LIMIT 1
+	 ) fp ON TRUE`
+
+const defaultGalleryListLimit = 500
+
 func (s *GalleryStore) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]*domain.Gallery, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT g.id, g.owner_id, g.title, g.description, g.slug, g.visibility,
-		        g.password_hash, g.cover_photo_id, g.created_at, g.updated_at,
-		        COUNT(p.id) AS photo_count,
-		        COALESCE(
-		            cp.thumb_path,
-		            (SELECT p2.thumb_path FROM photos p2
-		             WHERE p2.gallery_id = g.id
-		             ORDER BY p2.sort_order ASC, p2.created_at ASC
-		             LIMIT 1),
-		            ''
-		        ) AS cover_thumb
-		 FROM galleries g
-		 LEFT JOIN photos p ON p.gallery_id = g.id
-		 LEFT JOIN photos cp ON cp.id = g.cover_photo_id
+		`SELECT `+galleryListColumns+`
+		 FROM galleries g`+galleryListJoins+`
 		 WHERE g.owner_id = $1
-		 GROUP BY g.id, cp.thumb_path
-		 ORDER BY g.created_at DESC`, ownerID,
+		 ORDER BY g.created_at DESC
+		 LIMIT $2`, ownerID, defaultGalleryListLimit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list galleries by owner: %w", err)
@@ -111,23 +125,11 @@ func (s *GalleryStore) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]*d
 
 func (s *GalleryStore) ListPublic(ctx context.Context) ([]*domain.Gallery, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT g.id, g.owner_id, g.title, g.description, g.slug, g.visibility,
-		        g.password_hash, g.cover_photo_id, g.created_at, g.updated_at,
-		        COUNT(p.id) AS photo_count,
-		        COALESCE(
-		            cp.thumb_path,
-		            (SELECT p2.thumb_path FROM photos p2
-		             WHERE p2.gallery_id = g.id
-		             ORDER BY p2.sort_order ASC, p2.created_at ASC
-		             LIMIT 1),
-		            ''
-		        ) AS cover_thumb
-		 FROM galleries g
-		 LEFT JOIN photos p ON p.gallery_id = g.id
-		 LEFT JOIN photos cp ON cp.id = g.cover_photo_id
+		`SELECT `+galleryListColumns+`
+		 FROM galleries g`+galleryListJoins+`
 		 WHERE g.visibility = 'public'
-		 GROUP BY g.id, cp.thumb_path
-		 ORDER BY g.updated_at DESC`,
+		 ORDER BY g.updated_at DESC
+		 LIMIT $1`, defaultGalleryListLimit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list public galleries: %w", err)

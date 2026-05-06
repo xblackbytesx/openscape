@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -82,9 +83,10 @@ func ExtractMetadata(data []byte, mime string) *ImageMeta {
 }
 
 // ExtractVideoMeta uses ffprobe to extract video dimensions, duration and 360 detection.
-// filePath must be an absolute path to the saved video file.
-func ExtractVideoMeta(filePath string) (*VideoMeta, error) {
-	out, err := exec.Command("ffprobe",
+// filePath must be an absolute path to the saved video file. The context bounds
+// the subprocess wall-clock — pass a deadline so a corrupt header can't hang.
+func ExtractVideoMeta(ctx context.Context, filePath string) (*VideoMeta, error) {
+	out, err := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_streams",

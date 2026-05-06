@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
+	"github.com/openscape/openscape/internal/auth"
 	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/internal/httpx"
 	"github.com/openscape/openscape/internal/repository"
 )
 
@@ -12,7 +15,10 @@ const (
 	CtxGallery = "gallery"
 )
 
-// CheckGalleryAccess loads the gallery and checks visibility rules.
+// CheckGalleryAccess loads the gallery referenced by :slug and applies the
+// shared visibility rules from auth.CheckGalleryAccess. On failure it issues
+// the appropriate redirect (to /unlock for protected galleries, to /login
+// for private galleries with no user) so the gallery page UX stays smooth.
 // Must be placed after InjectUser.
 func CheckGalleryAccess(galleries *repository.GalleryStore, galSessions *repository.GallerySessionStore) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -27,55 +33,44 @@ func CheckGalleryAccess(galleries *repository.GalleryStore, galSessions *reposit
 
 			user, _ := c.Get(CtxUser).(*domain.User)
 
-			// Owner always has access
-			if user != nil && gallery.OwnerID == user.ID {
-				c.Set(CtxGallery, gallery)
-				c.Set(CtxCanEdit, true)
-				return next(c)
+			cookieValue := ""
+			if cookie, err := c.Cookie(domain.GalSessionCookiePrefix + slug); err == nil {
+				cookieValue = cookie.Value
 			}
 
-			// Admin always has access
-			if user != nil && user.IsAdmin {
-				c.Set(CtxGallery, gallery)
-				c.Set(CtxCanEdit, false)
-				return next(c)
-			}
-
-			switch gallery.Visibility {
-			case domain.VisibilityPublic, domain.VisibilityUnlisted:
-				c.Set(CtxGallery, gallery)
-
-			case domain.VisibilityUnlistedProtected:
-				cookieName := domain.GalSessionCookiePrefix + slug
-				cookie, err := c.Cookie(cookieName)
-				if err != nil || cookie.Value == "" {
-					return c.Redirect(http.StatusFound, "/g/"+slug+"/unlock")
-				}
-				gs, err := galSessions.GetByGallery(ctx, cookie.Value, gallery.ID)
-				if err != nil || gs == nil {
-					return c.Redirect(http.StatusFound, "/g/"+slug+"/unlock")
-				}
-				c.Set(CtxGallery, gallery)
-
-			case domain.VisibilityPrivate:
-				if user == nil {
-					if isHTMX(c) {
-						c.Response().Header().Set("HX-Redirect", "/login")
-						return c.NoContent(http.StatusUnauthorized)
+			result := auth.CheckGalleryAccess(ctx, gallery, user, cookieValue,
+				func(ctx context.Context, token string) bool {
+					gs, err := galSessions.GetByGallery(ctx, token, gallery.ID)
+					return err == nil && gs != nil
+				},
+				func(ctx context.Context) *domain.GalleryMember {
+					if user == nil {
+						return nil
 					}
-					return c.Redirect(http.StatusFound, "/login")
+					member, _ := galleries.GetMember(ctx, gallery.ID, user.ID)
+					return member
+				},
+			)
+
+			switch {
+			case result.RequiresUnlock:
+				return c.Redirect(http.StatusFound, "/g/"+slug+"/unlock")
+			case result.RequiresLogin:
+				if httpx.IsHTMX(c) {
+					c.Response().Header().Set("HX-Redirect", "/login")
+					return c.NoContent(http.StatusUnauthorized)
 				}
-				// Check gallery_members
-				member, err := galleries.GetMember(ctx, gallery.ID, user.ID)
-				if err != nil || member == nil {
-					return echo.ErrForbidden
-				}
-				c.Set(CtxGallery, gallery)
-				if member.Role == domain.RoleEditor {
-					c.Set(CtxCanEdit, true)
-				}
+				return c.Redirect(http.StatusFound, "/login")
+			case result.Forbidden:
+				return echo.ErrForbidden
+			case !result.Allowed:
+				return echo.ErrForbidden
 			}
 
+			c.Set(CtxGallery, gallery)
+			if result.CanEdit {
+				c.Set(CtxCanEdit, true)
+			}
 			return next(c)
 		}
 	}

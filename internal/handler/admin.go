@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -30,6 +31,7 @@ func (h *AdminHandler) Dashboard(c *echo.Context) error {
 
 	galleries, err := h.galleries.ListByOwner(ctx, user.ID)
 	if err != nil {
+		slog.Warn("admin dashboard: list galleries failed", "user_id", user.ID, "error", err)
 		galleries = []*domain.Gallery{}
 	}
 
@@ -109,11 +111,13 @@ func (h *AdminHandler) ManageGallery(c *echo.Context) error {
 
 	photos, err := h.photos.ListByGallery(ctx, galleryID)
 	if err != nil {
+		slog.Warn("manage gallery: list photos failed", "gallery_id", galleryID, "error", err)
 		photos = []*domain.Photo{}
 	}
 
 	members, err := h.galleries.ListMembers(ctx, galleryID)
 	if err != nil {
+		slog.Warn("manage gallery: list members failed", "gallery_id", galleryID, "error", err)
 		members = []*domain.GalleryMember{}
 	}
 

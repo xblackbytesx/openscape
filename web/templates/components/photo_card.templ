@@ -16,7 +16,59 @@ func photoType(p *domain.Photo) string {
 }
 
 templ PhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken string) {
+	if p.IsProcessing() {
+		@processingPhotoCard(p, canEdit, csrfToken)
+	} else {
+		@readyPhotoCard(p, gallerySlug, canEdit, csrfToken)
+	}
+}
+
+// processingPhotoCard renders a placeholder card that polls the status endpoint
+// every 2s. When the worker flips the row to ready/failed, the next poll swaps
+// this card for the real one (or a failed badge).
+templ processingPhotoCard(p *domain.Photo, canEdit bool, csrfToken string) {
+	<article
+		class="photo-card photo-card--processing"
+		data-id={ p.ID.String() }
+		data-type={ photoType(p) }
+		hx-get={ "/admin/galleries/" + p.GalleryID.String() + "/photos/" + p.ID.String() + "/status" }
+		hx-trigger="load delay:2s"
+		hx-swap="outerHTML"
+		hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+	>
+		<div class="photo-card__thumb photo-card__thumb--processing">
+			<div class="photo-card__spinner" aria-hidden="true"></div>
+			<p class="photo-card__title">Processing…</p>
+			if p.Filename != "" {
+				<p class="photo-card__subtitle">{ p.Filename }</p>
+			}
+		</div>
+		if canEdit {
+			<div class="photo-card__actions">
+				<button
+					class="btn-icon btn-icon--danger"
+					hx-delete={ "/admin/galleries/" + p.GalleryID.String() + "/photos/" + p.ID.String() }
+					hx-confirm="Cancel and delete this upload?"
+					hx-target="closest .photo-card"
+					hx-swap="outerHTML swap:0.3s"
+					hx-headers={ `{"X-CSRF-Token":"` + csrfToken + `"}` }
+					title="Cancel upload"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="3 6 5 6 21 6"/>
+						<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+					</svg>
+				</button>
+			</div>
+		}
+	</article>
+}
+
+templ readyPhotoCard(p *domain.Photo, gallerySlug string, canEdit bool, csrfToken string) {
 	<article class="photo-card" data-id={ p.ID.String() } data-type={ photoType(p) }>
+		if p.IsFailed() {
+			<span class="photo-card__failed-badge" title={ p.ProcessingError }>Processing failed</span>
+		}
 		<a href={ templ.SafeURL("/g/" + gallerySlug + "/photo/" + p.ID.String()) } class="photo-card__link">
 			if p.Is360 {
 				<div class="photo-card__thumb photo-card__thumb--panoramic" style={ "background-image:url(" + p.ThumbURL() + ")" }>

@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -17,6 +20,7 @@ import (
 	appmiddleware "github.com/openscape/openscape/internal/middleware"
 	"github.com/openscape/openscape/internal/media"
 	"github.com/openscape/openscape/internal/repository"
+	"github.com/openscape/openscape/internal/worker"
 )
 
 func main() {
@@ -49,12 +53,26 @@ func main() {
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	processor := media.NewProcessor(cfg.UploadsPath)
+	workerPool := worker.New(processor, photoStore, 0, 0)
+
+	tusURLPrefix := "/admin/galleries/tus/"
+	tusHandler, err := handler.NewTusHandler(tusURLPrefix, cfg.UploadsPath, galleryStore, photoStore, processor, workerPool)
+	if err != nil {
+		slog.Error("tus init failed", "error", err)
+		os.Exit(1)
+	}
 
 	// ── Background maintenance ────────────────────────────────────────────────
 	cleanupTicker := time.NewTicker(6 * time.Hour)
+	cleanupDone := make(chan struct{})
 	go func() {
-		for range cleanupTicker.C {
-			_ = gallerySessionStore.DeleteExpired(context.Background())
+		for {
+			select {
+			case <-cleanupTicker.C:
+				_ = gallerySessionStore.DeleteExpired(context.Background())
+			case <-cleanupDone:
+				return
+			}
 		}
 	}()
 
@@ -67,7 +85,7 @@ func main() {
 	homeHandler    := handler.NewHomeHandler(galleryStore)
 	galleryHandler := handler.NewGalleryHandler(galleryStore, photoStore, gallerySessionStore, cfg.SecureCookies)
 	adminHandler   := handler.NewAdminHandler(galleryStore, photoStore, userStore)
-	uploadHandler  := handler.NewUploadHandler(galleryStore, photoStore, processor, cfg.MaxUploadMB)
+	uploadHandler  := handler.NewUploadHandler(galleryStore, photoStore, processor, workerPool, cfg.MaxUploadMB)
 	usersHandler   := handler.NewUsersHandler(userStore)
 
 	// ── Rate limiters ────────────────────────────────────────────────────────
@@ -111,8 +129,16 @@ func main() {
 	// First-run redirect to /setup
 	e.Use(handler.CheckSetup(userStore))
 
-	// Static files
-	e.Static("/static", "web/static")
+	// Static files. Vendor JS (HTMX, PSV, tus) and CSS rarely change between
+	// deploys, so we cache aggressively. http.FileServer(http.Dir(...)) is
+	// the canonical traversal-safe path here; appending the URL path to a
+	// string would let "../etc/passwd" escape the root.
+	staticFS := http.StripPrefix("/static", http.FileServer(http.Dir("web/static")))
+	e.GET("/static/*", func(c *echo.Context) error {
+		c.Response().Header().Set("Cache-Control", "public, max-age=2592000")
+		staticFS.ServeHTTP(c.Response(), c.Request())
+		return nil
+	})
 
 	// ── Setup ────────────────────────────────────────────────────────────────
 	e.GET("/setup", setupHandler.Get)
@@ -161,11 +187,19 @@ func main() {
 	admin.DELETE("/galleries/:id", adminHandler.DeleteGallery)
 
 	admin.POST("/galleries/:id/photos",          uploadHandler.Upload)
+	admin.GET("/galleries/:id/photos/:pid/status", uploadHandler.PhotoStatus)
 	admin.DELETE("/galleries/:id/photos/:pid",   uploadHandler.DeletePhoto)
 	admin.PUT("/galleries/:id/photos/:pid",      uploadHandler.UpdatePhotoMeta)
 	admin.POST("/galleries/:id/photos/reorder",       uploadHandler.ReorderPhotos)
 	admin.POST("/galleries/:id/photos/sort-by-date",  uploadHandler.SortByDate)
 	admin.POST("/galleries/:id/cover/:pid",      adminHandler.SetCoverPhoto)
+
+	// tus.io resumable upload endpoint. tusd handles all methods (POST/HEAD/
+	// PATCH/DELETE/OPTIONS) at this prefix and below; auth check still runs.
+	for _, m := range []string{http.MethodPost, http.MethodHead, http.MethodPatch, http.MethodDelete, http.MethodOptions} {
+		admin.Add(m, "/galleries/tus", tusHandler.Mount)
+		admin.Add(m, "/galleries/tus/*", tusHandler.Mount)
+	}
 
 	admin.GET("/galleries/:id/members",        adminHandler.ManageGallery) // renders same page
 	admin.POST("/galleries/:id/members",       adminHandler.AddMember)
@@ -185,8 +219,58 @@ func main() {
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	slog.Info("starting openscape", "addr", addr)
 
-	if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
-		slog.Error("server error", "error", err)
-		os.Exit(1)
+	// Body read/write timeouts are intentionally zero so a slow upload is not
+	// killed by Go itself — the upload handler streams parts to disk and a
+	// stalled request can be cancelled via context. ReadHeaderTimeout protects
+	// against slowloris on the request line/headers; IdleTimeout reaps idle
+	// keep-alive connections so the connection pool can recycle.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           e,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
+
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	case <-shutdownCtx.Done():
+		slog.Info("shutdown signal received")
+	}
+
+	// Stop accepting new HTTP requests but let in-flight ones finish.
+	// Echo v5 doesn't expose Shutdown directly — we drive the underlying
+	// http.Server, which already has Echo wired in as its Handler.
+	graceCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(graceCtx); err != nil {
+		slog.Warn("http shutdown failed", "error", err)
+	}
+
+	// Tear down background goroutines.
+	cleanupTicker.Stop()
+	close(cleanupDone)
+	authLimiter.Stop()
+	unlockLimiter.Stop()
+
+	// Drain in-flight processing jobs (or give up after a deadline).
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer drainCancel()
+	workerPool.Shutdown(drainCtx)
+
+	slog.Info("shutdown complete")
 }
