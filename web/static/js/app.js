@@ -80,9 +80,14 @@ function initPhotoFilter() {
    tus path additionally provides:
      - Resume on connection drop (upload URLs persisted in localStorage).
      - Chunking, so a 4 GB upload that breaks at 3.9 GB doesn't restart. */
-var UPLOAD_CONCURRENCY = 3;
-var UPLOAD_STALL_MS = 30000;
-var TUS_CHUNK_SIZE = 8 * 1024 * 1024; // 8 MB chunks
+// Concurrency 1 by default — sequential uploads with tus resume are the right
+// trade-off on mobile. Concurrent tus uploads multiply chunk buffers, progress
+// events, and DOM mutations by N, which is enough to push a constrained phone
+// browser into "page unresponsive" territory. Throughput per file is unchanged
+// because each upload still saturates the link via chunking.
+var UPLOAD_CONCURRENCY = 1;
+var UPLOAD_STALL_MS = 60000; // 60s — a slow chunk on cellular is normal, don't cry wolf
+var TUS_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB — smaller buffer + faster retry on flaky links
 
 function initUploadForm() {
   var form = document.getElementById('upload-form');

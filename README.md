@@ -107,7 +107,21 @@ services:
       - "traefik.http.routers.openscape.middlewares=openscape-stream@docker"
 ```
 
+If you're chaining several `@file` middlewares already (rate-limit, secure-headers, gzip-compress, etc.), append the new docker-defined middleware to the same comma-separated list:
+
+```yaml
+      - traefik.http.middlewares.openscape-stream.buffering.maxRequestBodyBytes=0
+      - traefik.http.middlewares.openscape-stream.buffering.memRequestBodyBytes=2097152
+      - traefik.http.routers.openscape-app-secure.middlewares=https-redirect@file,non-www@file,secure-headers@file,gzip-compress@file,openscape-stream@docker
+```
+
 For nginx, the equivalent is `client_max_body_size <MAX_UPLOAD_MB>m;`, `client_body_timeout 0;`, and `proxy_request_buffering off;` on the `location /admin/galleries/` block.
+
+### Mobile / batch upload notes
+
+The browser uploader runs a single tus upload at a time by default (sequential, with chunked resume). On a phone that's not a throughput limit — each upload already saturates whatever bandwidth the device has — and it keeps memory pressure low so the tab doesn't get killed mid-batch. If you're on a fast desktop link and want to bump it, edit `UPLOAD_CONCURRENCY` near the top of `web/static/js/app.js`; values above 3 will hammer mobile clients.
+
+`MAX_UPLOAD_MB=2000` is the **server-side ceiling**, not a recommended upload size. Anything over a couple hundred MB on a mobile cellular link will be slow regardless of resumability — uploading a 1 GB video on a phone is a 30+ minute commitment even on 5G.
 
 ## Development
 
