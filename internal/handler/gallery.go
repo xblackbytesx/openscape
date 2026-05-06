@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -37,6 +38,7 @@ func (h *GalleryHandler) View(c *echo.Context) error {
 
 	photoList, err := h.photos.ListByGallery(ctx, gallery.ID)
 	if err != nil {
+		slog.Warn("gallery view: list photos failed", "gallery_id", gallery.ID, "error", err)
 		photoList = []*domain.Photo{}
 	}
 
@@ -70,21 +72,9 @@ func (h *GalleryHandler) PhotoView(c *echo.Context) error {
 		edit = true
 	}
 
-	var prevID, nextID *uuid.UUID
-	if allPhotos, err := h.photos.ListByGallery(ctx, gallery.ID); err == nil {
-		for i, p := range allPhotos {
-			if p.ID == photoID {
-				if i > 0 {
-					id := allPhotos[i-1].ID
-					prevID = &id
-				}
-				if i < len(allPhotos)-1 {
-					id := allPhotos[i+1].ID
-					nextID = &id
-				}
-				break
-			}
-		}
+	prevID, nextID, err := h.photos.Neighbors(ctx, gallery.ID, photoID)
+	if err != nil {
+		slog.Warn("photo view: neighbor lookup failed", "photo_id", photoID, "error", err)
 	}
 
 	return pages.PhotoView(gallery, photo, prevID, nextID, csrfToken(c), edit, user).Render(ctx, c.Response())

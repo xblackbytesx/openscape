@@ -20,6 +20,7 @@ type RateLimiter struct {
 	r        rate.Limit
 	b        int
 	ticker   *time.Ticker
+	done     chan struct{}
 }
 
 func NewRateLimiter(requestsPerMinute float64, burst int) *RateLimiter {
@@ -28,17 +29,31 @@ func NewRateLimiter(requestsPerMinute float64, burst int) *RateLimiter {
 		r:        rate.Limit(requestsPerMinute / 60.0),
 		b:        burst,
 		ticker:   time.NewTicker(5 * time.Minute),
+		done:     make(chan struct{}),
 	}
 	go func() {
-		for range rl.ticker.C {
-			rl.evict()
+		for {
+			select {
+			case <-rl.ticker.C:
+				rl.evict()
+			case <-rl.done:
+				return
+			}
 		}
 	}()
 	return rl
 }
 
-// Stop releases the background eviction goroutine.
-func (rl *RateLimiter) Stop() { rl.ticker.Stop() }
+// Stop releases the background eviction goroutine. Safe to call multiple times.
+func (rl *RateLimiter) Stop() {
+	rl.ticker.Stop()
+	select {
+	case <-rl.done:
+		// already closed
+	default:
+		close(rl.done)
+	}
+}
 
 func (rl *RateLimiter) evict() {
 	rl.mu.Lock()

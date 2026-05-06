@@ -74,27 +74,40 @@ type GalleryMember struct {
 	Email     string
 }
 
+type PhotoStatus string
+
+const (
+	PhotoStatusProcessing PhotoStatus = "processing"
+	PhotoStatusReady      PhotoStatus = "ready"
+	PhotoStatusFailed     PhotoStatus = "failed"
+)
+
 type Photo struct {
-	ID             uuid.UUID
-	GalleryID      uuid.UUID
-	UploadedBy     uuid.UUID
-	Title          string
-	Description    string
-	Filename       string
-	StoragePath    string
-	ThumbPath      string
-	Width          *int
-	Height         *int
-	FileSize       *int64
-	MimeType       string
-	Is360          bool
-	ProjectionType *string
-	ExifData       map[string]any
-	CapturedAt     *time.Time
-	Duration       *int // seconds; nil for images
-	SortOrder      int
-	CreatedAt      time.Time
+	ID              uuid.UUID
+	GalleryID       uuid.UUID
+	UploadedBy      uuid.UUID
+	Title           string
+	Description     string
+	Filename        string
+	StoragePath     string
+	ThumbPath       string
+	Width           *int
+	Height          *int
+	FileSize        *int64
+	MimeType        string
+	Is360           bool
+	ProjectionType  *string
+	ExifData        map[string]any
+	CapturedAt      *time.Time
+	Duration        *int // seconds; nil for images
+	SortOrder       int
+	Status          PhotoStatus
+	ProcessingError string
+	CreatedAt       time.Time
 }
+
+func (p *Photo) IsProcessing() bool { return p.Status == PhotoStatusProcessing }
+func (p *Photo) IsFailed() bool     { return p.Status == PhotoStatusFailed }
 
 // ThumbURL returns the URL to the thumbnail image.
 // ThumbPath is stored as e.g. "galleryID/thumbs/photoID_thumb.jpg"

@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
+	"github.com/openscape/openscape/internal/auth"
 	"github.com/openscape/openscape/internal/domain"
 	"github.com/openscape/openscape/internal/media"
 	"github.com/openscape/openscape/internal/repository"
@@ -41,11 +43,30 @@ func ServeUpload(
 			return echo.ErrNotFound
 		}
 
-		// Access check (same logic as gallery middleware)
+		// Access check (shared with gallery view middleware)
 		user, _ := c.Get("user").(*domain.User)
-
-		if err := checkGalleryAccessByGallery(c, galByID, user, galleries, galSessions); err != nil {
-			return err
+		cookieValue := ""
+		if cookie, err := c.Cookie(domain.GalSessionCookiePrefix + galByID.Slug); err == nil {
+			cookieValue = cookie.Value
+		}
+		access := auth.CheckGalleryAccess(ctx, galByID, user, cookieValue,
+			func(ctx context.Context, token string) bool {
+				gs, err := galSessions.GetByGallery(ctx, token, galByID.ID)
+				return err == nil && gs != nil
+			},
+			func(ctx context.Context) *domain.GalleryMember {
+				if user == nil {
+					return nil
+				}
+				member, _ := galleries.GetMember(ctx, galByID.ID, user.ID)
+				return member
+			},
+		)
+		if !access.Allowed {
+			if access.RequiresLogin {
+				return echo.ErrUnauthorized
+			}
+			return echo.ErrForbidden
 		}
 
 		// Parse path type
@@ -78,45 +99,3 @@ func ServeUpload(
 	}
 }
 
-func checkGalleryAccessByGallery(
-	c *echo.Context,
-	gallery *domain.Gallery,
-	user *domain.User,
-	galleries *repository.GalleryStore,
-	galSessions *repository.GallerySessionStore,
-) error {
-	ctx := c.Request().Context()
-
-	// Owner always has access
-	if user != nil && (gallery.OwnerID == user.ID || user.IsAdmin) {
-		return nil
-	}
-
-	switch gallery.Visibility {
-	case domain.VisibilityPublic, domain.VisibilityUnlisted:
-		return nil
-
-	case domain.VisibilityUnlistedProtected:
-		cookieName := domain.GalSessionCookiePrefix + gallery.Slug
-		cookie, err := c.Cookie(cookieName)
-		if err != nil || cookie.Value == "" {
-			return echo.ErrForbidden
-		}
-		gs, err := galSessions.GetByGallery(ctx, cookie.Value, gallery.ID)
-		if err != nil || gs == nil {
-			return echo.ErrForbidden
-		}
-		return nil
-
-	case domain.VisibilityPrivate:
-		if user == nil {
-			return echo.ErrUnauthorized
-		}
-		member, err := galleries.GetMember(ctx, gallery.ID, user.ID)
-		if err != nil || member == nil {
-			return echo.ErrForbidden
-		}
-		return nil
-	}
-	return echo.ErrForbidden
-}

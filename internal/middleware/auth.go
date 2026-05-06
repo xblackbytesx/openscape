@@ -6,6 +6,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/openscape/openscape/internal/auth"
 	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/internal/httpx"
 	"github.com/openscape/openscape/internal/repository"
 )
 
@@ -35,7 +36,7 @@ func RequireAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			if c.Get(CtxUser) == nil {
-				if isHTMX(c) {
+				if httpx.IsHTMX(c) {
 					c.Response().Header().Set("HX-Redirect", "/login")
 					return c.NoContent(http.StatusUnauthorized)
 				}
@@ -59,6 +60,3 @@ func RequireAdmin() echo.MiddlewareFunc {
 	}
 }
 
-func isHTMX(c *echo.Context) bool {
-	return c.Request().Header.Get("HX-Request") == "true"
-}

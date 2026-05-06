@@ -73,6 +73,42 @@ OpenScape expects to sit behind Traefik (or any reverse proxy) that handles TLS.
 
 Set `SECURE_COOKIES=true` in production so session and CSRF cookies are only sent over HTTPS.
 
+### Large / slow uploads
+
+The Go server itself does not impose a body read timeout — multipart parts are streamed straight to disk. The worker pool generates thumbnails and runs `ffprobe`/`ffmpeg` in the background, so the HTTP response returns as soon as bytes are durably saved.
+
+Reverse-proxy timeouts are usually the bottleneck. For Traefik, the relevant defaults can cut off a 1 GB upload on a 1 Mbps link before it finishes. Either bump `respondingTimeouts` on the entry point globally:
+
+```yaml
+# traefik.yml
+entryPoints:
+  websecure:
+    address: ":443"
+    transport:
+      respondingTimeouts:
+        readTimeout: "0s"   # no per-request body read timeout
+        idleTimeout: "180s"
+```
+
+…or, on the `openscape-app` service in `docker-compose.yml`, attach a per-route override and disable buffering for the upload endpoint:
+
+```yaml
+services:
+  openscape-app:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openscape.rule=Host(`gallery.example.com`)"
+      - "traefik.http.routers.openscape.entrypoints=websecure"
+      - "traefik.http.routers.openscape.tls.certresolver=letsencrypt"
+      - "traefik.http.services.openscape.loadbalancer.server.port=8080"
+      # Stream uploads instead of buffering them in Traefik:
+      - "traefik.http.middlewares.openscape-stream.buffering.maxRequestBodyBytes=0"
+      - "traefik.http.middlewares.openscape-stream.buffering.memRequestBodyBytes=2097152"
+      - "traefik.http.routers.openscape.middlewares=openscape-stream@docker"
+```
+
+For nginx, the equivalent is `client_max_body_size <MAX_UPLOAD_MB>m;`, `client_body_timeout 0;`, and `proxy_request_buffering off;` on the `location /admin/galleries/` block.
+
 ## Development
 
 ```bash

@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -64,6 +65,17 @@ func (p *Processor) SaveOriginalFromReader(galleryID, photoID uuid.UUID, r io.Re
 	return filepath.Join(galleryID.String(), "originals", filename), n, nil
 }
 
+// GenerateThumbnailFromFile decodes an image from the original on disk and
+// writes a thumbnail. Avoids the RAM spike of buffering the whole file before
+// decoding (relevant for 100+ MB equirectangular PNGs).
+func (p *Processor) GenerateThumbnailFromFile(galleryID, photoID uuid.UUID, originalPath string, is360 bool) (string, int, int, error) {
+	img, err := imaging.Open(originalPath, imaging.AutoOrientation(true))
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("open image: %w", err)
+	}
+	return p.writeImageThumb(galleryID, photoID, img, is360)
+}
+
 // GenerateThumbnail creates a thumbnail from image data.
 // For 360 photos (is360=true), it crops the center horizontal strip and produces a 2:1 thumb.
 // Returns (relThumbPath, origWidth, origHeight, error).
@@ -72,6 +84,10 @@ func (p *Processor) GenerateThumbnail(galleryID, photoID uuid.UUID, data []byte,
 	if err != nil {
 		return "", 0, 0, fmt.Errorf("decode image: %w", err)
 	}
+	return p.writeImageThumb(galleryID, photoID, img, is360)
+}
+
+func (p *Processor) writeImageThumb(galleryID, photoID uuid.UUID, img image.Image, is360 bool) (string, int, int, error) {
 
 	bounds := img.Bounds()
 	origW := bounds.Dx()
@@ -106,7 +122,8 @@ func (p *Processor) GenerateThumbnail(galleryID, photoID uuid.UUID, data []byte,
 // saves it as a JPEG thumbnail.  Falls back to a dark placeholder image if
 // ffmpeg is unavailable or fails, so the caller always gets a valid JPEG path.
 // The input path must be an absolute filesystem path to the saved original video.
-func (p *Processor) GenerateVideoThumbnail(galleryID, photoID uuid.UUID, inputPath string, is360 bool) (string, error) {
+// ctx bounds each ffmpeg invocation so a corrupt/truncated header can't hang the worker.
+func (p *Processor) GenerateVideoThumbnail(ctx context.Context, galleryID, photoID uuid.UUID, inputPath string, is360 bool) (string, error) {
 	dir := filepath.Join(p.uploadsPath, galleryID.String(), "thumbs")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create thumbs dir: %w", err)
@@ -121,7 +138,7 @@ func (p *Processor) GenerateVideoThumbnail(galleryID, photoID uuid.UUID, inputPa
 	ffmpegOK := false
 	for _, seek := range []string{"1", "0"} {
 		var stderr bytes.Buffer
-		cmd := exec.Command("ffmpeg",
+		cmd := exec.CommandContext(ctx, "ffmpeg",
 			"-ss", seek,
 			"-i", inputPath,
 			"-vframes", "1",
@@ -132,6 +149,9 @@ func (p *Processor) GenerateVideoThumbnail(galleryID, photoID uuid.UUID, inputPa
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err == nil {
 			ffmpegOK = true
+			break
+		}
+		if ctx.Err() != nil {
 			break
 		}
 	}
@@ -186,6 +206,12 @@ func (p *Processor) DeletePhoto(storagePath, thumbPath string) {
 // ServeOriginalPath returns the filesystem path for an original file.
 func (p *Processor) ServeOriginalPath(relPath string) string {
 	return filepath.Join(p.uploadsPath, relPath)
+}
+
+// UploadsRoot returns the absolute uploads directory; used by external
+// uploaders (e.g. tus) that place finished files into per-gallery dirs.
+func (p *Processor) UploadsRoot() string {
+	return p.uploadsPath
 }
 
 // ServeThumbPath returns the filesystem path for a thumbnail file.

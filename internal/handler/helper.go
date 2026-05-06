@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 	"github.com/openscape/openscape/internal/domain"
+	"github.com/openscape/openscape/internal/httpx"
 	"github.com/openscape/openscape/internal/repository"
 )
 
@@ -14,7 +15,7 @@ var emailRe = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{
 var slugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func isHTMX(c *echo.Context) bool {
-	return c.Request().Header.Get("HX-Request") == "true"
+	return httpx.IsHTMX(c)
 }
 
 func csrfToken(c *echo.Context) string {

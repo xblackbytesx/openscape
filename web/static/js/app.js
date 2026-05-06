@@ -63,21 +63,42 @@ function initPhotoFilter() {
   });
 }
 
-/* ── Per-file XHR upload with progress bars ── */
+/* ── Resumable uploads via tus-js-client ──
+   tus.min.js is loaded with `defer` so window.tus may not exist when
+   DOMContentLoaded fires. We feature-detect at submit time. If tus is
+   unavailable for any reason (script blocked, ancient browser), we fall
+   back to a parallel-pool XHR uploader.
+
+   Either path:
+     - Parallel pool of UPLOAD_CONCURRENCY simultaneous uploads.
+     - "Stalled" badge if no progress event arrives for UPLOAD_STALL_MS
+       (server is processing, not actually stuck).
+     - beforeunload aborts pending uploads so the server stops working.
+     - Page reloads after all files finish so HTMX-polling photo cards
+       pick up status updates from the worker pool.
+
+   tus path additionally provides:
+     - Resume on connection drop (upload URLs persisted in localStorage).
+     - Chunking, so a 4 GB upload that breaks at 3.9 GB doesn't restart. */
+var UPLOAD_CONCURRENCY = 3;
+var UPLOAD_STALL_MS = 30000;
+var TUS_CHUNK_SIZE = 8 * 1024 * 1024; // 8 MB chunks
+
 function initUploadForm() {
   var form = document.getElementById('upload-form');
-  if (!form) return;
+  var zone = document.getElementById('upload-zone');
+  if (!form || !zone) return;
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
-    var input  = form.querySelector('input[type="file"]');
+    var input = form.querySelector('input[type="file"]');
     if (!input || !input.files.length) return;
 
     var files   = Array.from(input.files);
     var labelEl = document.getElementById('upload-zone-label');
     var listEl  = document.getElementById('upload-file-list');
-    var csrf    = form.querySelector('[name="_csrf"]').value;
+    var csrf    = zone.dataset.csrfToken || form.querySelector('[name="_csrf"]').value;
 
     if (labelEl) labelEl.style.display = 'none';
     input.disabled = true;
@@ -88,7 +109,7 @@ function initUploadForm() {
       item.innerHTML =
         '<div class="upload-file-item__header">' +
           '<span class="upload-file-item__name" title="' + escapeHtml(file.name) + '">' + escapeHtml(file.name) + '</span>' +
-          '<span class="upload-file-item__status">Waiting\u2026</span>' +
+          '<span class="upload-file-item__status">Waiting…</span>' +
         '</div>' +
         '<div class="upload-file-item__bar-track">' +
           '<div class="upload-file-item__bar"></div>' +
@@ -99,57 +120,154 @@ function initUploadForm() {
         el:     item,
         status: item.querySelector('.upload-file-item__status'),
         bar:    item.querySelector('.upload-file-item__bar'),
+        upload: null,
+        done:   false,
       };
     });
 
-    function uploadNext(index) {
-      if (index >= rows.length) {
-        setTimeout(function () { window.location.reload(); }, 1500);
-        return;
+    var nextIndex = 0;
+    var inFlight  = 0;
+    var completed = 0;
+    var aborters  = new Set();
+
+    function abortPending() {
+      aborters.forEach(function (a) { try { a(); } catch (_) {} });
+    }
+    window.addEventListener('beforeunload', abortPending, { once: true });
+
+    function setStallWatcher(row, getLastProgress) {
+      var t = setInterval(function () {
+        if (row.done) { clearInterval(t); return; }
+        if (Date.now() - getLastProgress() > UPLOAD_STALL_MS) {
+          row.el.classList.add('upload-file-item--stalled');
+          row.status.textContent = 'Server processing…';
+        }
+      }, 5000);
+      return t;
+    }
+
+    function finishRow(row, success, message) {
+      if (row.done) return;
+      row.done = true;
+      if (success) {
+        row.bar.style.width = '100%';
+        row.status.textContent = 'Done';
+        row.el.classList.add('upload-file-item--done');
+      } else {
+        row.status.textContent = message || 'Failed';
+        row.el.classList.add('upload-file-item--error');
       }
+      completed++;
+      inFlight--;
+      pump();
+    }
 
-      var row = rows[index];
+    function uploadViaTus(row) {
+      var lastProgress = Date.now();
+      var stallTimer = setStallWatcher(row, function () { return lastProgress; });
+
+      var upload = new tus.Upload(row.file, {
+        endpoint: zone.dataset.tusEndpoint,
+        chunkSize: TUS_CHUNK_SIZE,
+        retryDelays: [0, 1000, 3000, 5000, 10000, 30000],
+        storeFingerprintForResuming: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          filename:  row.file.name,
+          filetype:  row.file.type || 'application/octet-stream',
+          galleryID: zone.dataset.galleryId,
+        },
+        headers: { 'X-CSRF-Token': csrf },
+        onProgress: function (sent, total) {
+          lastProgress = Date.now();
+          row.el.classList.remove('upload-file-item--stalled');
+          var pct = Math.round(sent / total * 100);
+          row.bar.style.width = pct + '%';
+          row.status.textContent = pct + '% — ' + formatBytes(sent) + ' of ' + formatBytes(total);
+        },
+        onSuccess: function () {
+          clearInterval(stallTimer);
+          aborters.delete(abortFn);
+          finishRow(row, true);
+        },
+        onError: function (err) {
+          clearInterval(stallTimer);
+          aborters.delete(abortFn);
+          finishRow(row, false, (err && err.message) || 'Upload failed');
+        },
+      });
+      row.upload = upload;
+      function abortFn() { try { upload.abort(true); } catch (_) {} }
+      aborters.add(abortFn);
+      // Try to resume an incomplete upload from a previous session for this file.
+      upload.findPreviousUploads().then(function (previous) {
+        if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
+        upload.start();
+      });
+    }
+
+    function uploadViaXHR(row) {
       row.status.textContent = '0%';
-
       var fd = new FormData();
       fd.append('_csrf', csrf);
       fd.append('photos', row.file);
 
       var xhr = new XMLHttpRequest();
+      xhr.timeout = 0;
+      var lastProgress = Date.now();
+      var stallTimer = setStallWatcher(row, function () { return lastProgress; });
+      function abortFn() { try { xhr.abort(); } catch (_) {} }
+      aborters.add(abortFn);
 
       xhr.upload.addEventListener('progress', function (e) {
+        lastProgress = Date.now();
+        row.el.classList.remove('upload-file-item--stalled');
         if (!e.lengthComputable) return;
         var pct = Math.round(e.loaded / e.total * 100);
         row.bar.style.width = pct + '%';
-        row.status.textContent = pct + '% \u2014 ' + formatBytes(e.loaded) + ' of ' + formatBytes(e.total);
+        row.status.textContent = pct + '% — ' + formatBytes(e.loaded) + ' of ' + formatBytes(e.total);
       });
-
       xhr.addEventListener('load', function () {
+        clearInterval(stallTimer);
+        aborters.delete(abortFn);
         if (xhr.status >= 200 && xhr.status < 300) {
-          row.bar.style.width = '100%';
-          row.status.textContent = 'Done';
-          row.el.classList.add('upload-file-item--done');
+          finishRow(row, true);
         } else {
           var msg = 'Failed';
           try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) {}
-          row.status.textContent = msg;
-          row.el.classList.add('upload-file-item--error');
+          finishRow(row, false, msg);
         }
-        uploadNext(index + 1);
       });
-
       xhr.addEventListener('error', function () {
-        row.status.textContent = 'Network error';
-        row.el.classList.add('upload-file-item--error');
-        uploadNext(index + 1);
+        clearInterval(stallTimer); aborters.delete(abortFn); finishRow(row, false, 'Network error');
       });
-
-      xhr.open('POST', form.action);
+      xhr.addEventListener('abort', function () {
+        clearInterval(stallTimer); aborters.delete(abortFn); finishRow(row, false, 'Cancelled');
+      });
+      xhr.open('POST', zone.dataset.fallbackEndpoint || form.action);
       xhr.setRequestHeader('X-CSRF-Token', csrf);
       xhr.send(fd);
     }
 
-    uploadNext(0);
+    var useTus = typeof window.tus !== 'undefined' && tus.isSupported && zone.dataset.tusEndpoint;
+
+    function uploadOne(row) {
+      if (useTus) uploadViaTus(row);
+      else uploadViaXHR(row);
+    }
+
+    function pump() {
+      while (inFlight < UPLOAD_CONCURRENCY && nextIndex < rows.length) {
+        inFlight++;
+        uploadOne(rows[nextIndex++]);
+      }
+      if (completed >= rows.length) {
+        window.removeEventListener('beforeunload', abortPending);
+        setTimeout(function () { window.location.reload(); }, 1500);
+      }
+    }
+
+    pump();
   });
 }
 

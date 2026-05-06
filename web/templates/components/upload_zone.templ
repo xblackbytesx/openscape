@@ -3,7 +3,14 @@ package components
 import "github.com/openscape/openscape/internal/domain"
 
 templ UploadZone(gallery *domain.Gallery, csrfToken string) {
-	<div class="upload-zone" id="upload-zone">
+	<div
+		class="upload-zone"
+		id="upload-zone"
+		data-gallery-id={ gallery.ID.String() }
+		data-tus-endpoint="/admin/galleries/tus/"
+		data-fallback-endpoint={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
+		data-csrf-token={ csrfToken }
+	>
 		<form
 			id="upload-form"
 			action={ "/admin/galleries/" + gallery.ID.String() + "/photos" }
